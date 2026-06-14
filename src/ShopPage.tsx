@@ -1,66 +1,9 @@
-import { useEffect, useMemo, useState, useCallback, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { fetchAllActiveListings, type Listing } from "./listings";
 import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
-
-// Re-use ItemIcon for shop items
-function ShopItemIcon({ itemId, itemComponents, size = 32 }: { itemId: string; itemComponents?: string; size?: number }) {
-  // Use the same component as the warehouse — but we can't import from App directly
-  // For now just render a simple img with fallback
-  const cdnBase = (import.meta.env.VITE_TEXTURE_CDN_URL as string) || "https://assets.mcasset.cloud/1.21";
-
-  function parseItemModel(itemComponents: string): string | null {
-    const match = itemComponents.match(/minecraft:item_model=>([a-z0-9_.-]+:[a-z0-9_./-]+)/);
-    return match ? match[1] : null;
-  }
-
-  const urls = useMemo(() => {
-    const u: string[] = [];
-    if (itemComponents) {
-      const model = parseItemModel(itemComponents);
-      if (model && model !== itemId) {
-        const [ns, path] = model.split(":");
-        u.push(`/textures/assets/${ns}/textures/${path}.png`);
-        u.push(`/textures/assets/${ns}/textures/item/${path}.png`);
-        u.push(`${cdnBase}/assets/${ns}/textures/${path}.png`);
-        u.push(`${cdnBase}/assets/${ns}/textures/item/${path}.png`);
-      }
-    }
-    const [ns, path] = itemId.includes(":") ? itemId.split(":") : ["minecraft", itemId];
-    u.push(`/textures/assets/${ns}/textures/${path}.png`);
-    u.push(`/textures/assets/${ns}/textures/item/${path}.png`);
-    u.push(`${cdnBase}/assets/${ns}/textures/item/${path}.png`);
-    return u;
-  }, [itemId, itemComponents]);
-
-  const [urlIdx, setUrlIdx] = useState(0);
-  const handleError = useCallback(() => {
-    setUrlIdx((prev) => (prev + 1 < urls.length ? prev + 1 : -1));
-  }, [urls.length]);
-
-  if (urlIdx === -1 || urlIdx >= urls.length) {
-    return (
-      <div className="item-icon item-icon-fallback" style={{ width: size, height: size }}>
-        {itemId.charAt(itemId.includes(":") ? itemId.indexOf(":") + 1 : 0).toUpperCase()}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      key={urls[urlIdx]}
-      className="item-icon"
-      src={urls[urlIdx]}
-      alt={itemId}
-      width={size}
-      height={size}
-      loading="lazy"
-      style={{ imageRendering: "pixelated" }}
-      onError={handleError}
-    />
-  );
-}
+import ItemIcon from "./ItemIcon";
 
 type SortField = "name" | "price";
 
@@ -155,7 +98,7 @@ export default function ShopPage() {
                 <Fragment key={listing.id}>
                   <tr className="item-row shop-row">
                     <td className="item-icon-cell">
-                      <ShopItemIcon itemId={listing.itemId} itemComponents={listing.itemComponents} />
+                      <ItemIcon itemId={listing.itemId} itemComponents={listing.itemComponents} />
                     </td>
                     <td className="item-name clickable" onClick={() => setExpandedListing(expandedListing === listing.id ? null : listing.id)}>
                       {listing.itemName}

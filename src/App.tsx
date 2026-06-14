@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, Fragment } from "react";
 import { fetchWarehouseData } from "./turso";
 import type { WarehouseChest, WarehouseData, ChestItem } from "./turso";
-import WeaponModelIcon from "./WeaponModelIcon";
+import ItemIcon from "./ItemIcon";
 import MinecraftTooltip from "./MinecraftTooltip";
 import { parseCustomData, parseCustomName, type CustomData } from "./loreParser";
 import { useAuth } from "./auth/AuthContext";
@@ -20,109 +20,6 @@ function getAvatarUrl(user: DiscordUser): string {
   return `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
 }
 
-/** Extract item_model from components string (1.21+ format) */
-function parseItemModel(itemComponents: string): string | null {
-  const match = itemComponents.match(/minecraft:item_model=>([a-z0-9_.-]+:[a-z0-9_./-]+)/);
-  return match ? match[1] : null;
-}
-
-/** Build item texture URLs — item_model first, then itemId fallback, local → CDN */
-function getItemIconUrls(itemId: string, itemComponents?: string): string[] {
-  const urls: string[] = [];
-  const cdnBase = (import.meta.env.VITE_TEXTURE_CDN_URL as string) || "https://assets.mcasset.cloud/1.21";
-
-  // 1. Try item_model from components (custom items via ItemsAdder/Oraxen)
-  if (itemComponents) {
-    const itemModel = parseItemModel(itemComponents);
-    if (itemModel && itemModel !== itemId) {
-      const [ns, path] = itemModel.split(":");
-      // Local: direct path (resource pack structure: textures/bow/dark.png)
-      urls.push(`/textures/assets/${ns}/textures/${path}.png`);
-      // Local: item/ and block/ subfolders
-      urls.push(`/textures/assets/${ns}/textures/item/${path}.png`);
-      urls.push(`/textures/assets/${ns}/textures/block/${path}.png`);
-      // CDN fallback
-      urls.push(`${cdnBase}/assets/${ns}/textures/${path}.png`);
-      urls.push(`${cdnBase}/assets/${ns}/textures/item/${path}.png`);
-      urls.push(`${cdnBase}/assets/${ns}/textures/block/${path}.png`);
-    }
-  }
-
-  // 2. Fallback to vanilla itemId
-  const [ns, path] = itemId.includes(":") ? itemId.split(":") : ["minecraft", itemId];
-  urls.push(`/textures/assets/${ns}/textures/${path}.png`);
-  urls.push(`/textures/assets/${ns}/textures/item/${path}.png`);
-  urls.push(`/textures/assets/${ns}/textures/block/${path}.png`);
-  urls.push(`${cdnBase}/assets/${ns}/textures/item/${path}.png`);
-  urls.push(`${cdnBase}/assets/${ns}/textures/block/${path}.png`);
-
-  return urls;
-}
-
-function ItemIcon({ itemId, itemComponents, size = 32 }: { itemId: string; itemComponents?: string; size?: number }) {
-  // Detect qp_weapon items → render 3D model on Canvas
-  const itemModel = itemComponents ? parseItemModel(itemComponents) : null;
-  const isWeapon = !!itemModel && itemModel.startsWith("qp_weapon:");
-
-  const urls = useMemo(() => getItemIconUrls(itemId, itemComponents), [itemId, itemComponents]);
-  const [urlIndex, setUrlIndex] = useState(0);
-
-  const handleError = useCallback(() => {
-    setUrlIndex((prev) => {
-      const next = prev + 1;
-      return next < urls.length ? next : -1;
-    });
-  }, [urls.length]);
-
-  if (isWeapon) {
-    return (
-      <WeaponModelIcon
-        modelRef={itemModel!}
-        size={size}
-        fallback={
-          urls.length > 0 ? (
-            <img
-              className="item-icon"
-              src={urls[urls.length - 2] || urls[0]}
-              alt={itemId}
-              width={size}
-              height={size}
-              loading="lazy"
-              style={{ imageRendering: "pixelated" }}
-              onError={handleError}
-            />
-          ) : (
-            <div className="item-icon item-icon-fallback" style={{ width: size, height: size }}>
-              {itemId.charAt(itemId.includes(":") ? itemId.indexOf(":") + 1 : 0).toUpperCase()}
-            </div>
-          )
-        }
-      />
-    );
-  }
-
-  if (urls.length === 0 || urlIndex === -1 || urlIndex >= urls.length) {
-    return (
-      <div className="item-icon item-icon-fallback" style={{ width: size, height: size }}>
-        {itemId.charAt(itemId.includes(":") ? itemId.indexOf(":") + 1 : 0).toUpperCase()}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      key={urls[urlIndex]}
-      className="item-icon"
-      src={urls[urlIndex]}
-      alt={itemId}
-      width={size}
-      height={size}
-      loading="lazy"
-      style={{ imageRendering: "pixelated" }}
-      onError={handleError}
-    />
-  );
-}
 
 interface AggregatedItem {
   itemId: string;
