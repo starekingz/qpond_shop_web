@@ -7,6 +7,9 @@ import { parseCustomData, parseCustomName, type CustomData } from "./loreParser"
 import { useAuth } from "./auth/AuthContext";
 import type { DiscordUser } from "./auth/AuthContext";
 import { fetchListings, createListing, cancelListing, fetchAllActiveListings, buildListingTypeMap, type Listing } from "./listings";
+import ShopPage from "./ShopPage";
+import OrdersPage from "./OrdersPage";
+import CartSidebar from "./cart/CartSidebar";
 import "./App.css";
 
 function getAvatarUrl(user: DiscordUser): string {
@@ -146,7 +149,7 @@ interface StatGroup {
   statIds: string[]; // unique stat IDs across all instances
 }
 
-type ViewMode = "items" | "chests" | "stats";
+type ViewMode = "shop" | "items" | "chests" | "stats" | "orders";
 
 const STAT_LABELS: Record<string, string> = {
   ATK: "攻擊力",
@@ -187,12 +190,12 @@ function posKey(pos: { x: number; y: number; z: number }): string {
 }
 
 function App() {
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, hasListingRole } = useAuth();
   const [data, setData] = useState<WarehouseData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<ViewMode>("items");
+  const [view, setView] = useState<ViewMode>("shop");
   const [selectedChest, setSelectedChest] = useState<WarehouseChest | null>(null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [selectedStatItem, setSelectedStatItem] = useState<string | null>(null);
@@ -380,8 +383,44 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-top">
-          <h1>倉儲物品查詢</h1>
+          <nav className="main-nav">
+            <button
+              className={view === "shop" ? "nav-tab active" : "nav-tab"}
+              onClick={() => setView("shop")}
+            >
+              商城
+            </button>
+            {hasListingRole && (
+              <>
+                <button
+                  className={view === "items" ? "nav-tab active" : "nav-tab"}
+                  onClick={() => { setView("items"); setSelectedChest(null); }}
+                >
+                  物品總覽
+                </button>
+                <button
+                  className={view === "chests" ? "nav-tab active" : "nav-tab"}
+                  onClick={() => { setView("chests"); setSelectedChest(null); }}
+                >
+                  箱子列表
+                </button>
+                <button
+                  className={view === "stats" ? "nav-tab active" : "nav-tab"}
+                  onClick={() => { setView("stats"); setSelectedChest(null); setSelectedStatItem(null); setSortByStat(null); }}
+                >
+                  數值比較
+                </button>
+                <button
+                  className={view === "orders" ? "nav-tab active" : "nav-tab"}
+                  onClick={() => setView("orders")}
+                >
+                  訂單管理
+                </button>
+              </>
+            )}
+          </nav>
           <div className="user-area">
+            <CartSidebar />
             {user ? (
               <div className="user-info">
                 <img
@@ -400,53 +439,50 @@ function App() {
             )}
           </div>
         </div>
-        <div className="meta">
-          <span>箱子數: {data?.chests.length ?? 0}</span>
-          <span>物品種類: {aggregated.length}</span>
-          {data?.uploadedAt && <span>最後上傳: {new Date(data.uploadedAt).toLocaleString("zh-TW")}</span>}
-          <button className="refresh-btn" onClick={loadData}>重新整理</button>
-        </div>
       </header>
 
-      <div className="controls">
-        <input
-          className="search-input"
-          type="text"
-          placeholder="搜尋物品名稱 / 座標..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className="view-toggle">
-          <button
-            className={view === "items" ? "active" : ""}
-            onClick={() => { setView("items"); setSelectedChest(null); }}
-          >
-            物品總覽
-          </button>
-          <button
-            className={view === "chests" ? "active" : ""}
-            onClick={() => { setView("chests"); setSelectedChest(null); }}
-          >
-            箱子列表
-          </button>
-          <button
-            className={view === "stats" ? "active" : ""}
-            onClick={() => { setView("stats"); setSelectedChest(null); setSelectedStatItem(null); setSortByStat(null); }}
-          >
-            數值比較
-          </button>
-        </div>
-      </div>
+      {view === "shop" && <ShopPage />}
+      {view === "orders" && hasListingRole && <OrdersPage />}
 
-      {selectedChest && (
-        <ChestDetail
-          chest={selectedChest}
-          onClose={() => setSelectedChest(null)}
-          onListingsUpdate={onListingsUpdate}
-        />
-      )}
+      {hasListingRole && view !== "shop" && view !== "orders" && (
+        <>
+          <div className="meta">
+            <span>箱子數: {data?.chests.length ?? 0}</span>
+            <span>物品種類: {aggregated.length}</span>
+            {data?.uploadedAt && <span>最後上傳: {new Date(data.uploadedAt).toLocaleString("zh-TW")}</span>}
+            <button className="refresh-btn" onClick={loadData}>重新整理</button>
+          </div>
 
-      {view === "items" && !selectedChest && (
+          {loading && <div className="loading">載入中...</div>}
+          {error && (
+            <div className="error-box">
+              <h2>載入失敗</h2>
+              <p>{error}</p>
+              <button onClick={loadData}>重試</button>
+            </div>
+          )}
+
+          {!loading && !error && (
+            <>
+              <div className="controls">
+                <input
+                  className="search-input"
+                  type="text"
+                  placeholder="搜尋物品名稱 / 座標..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+            {selectedChest && (
+              <ChestDetail
+                chest={selectedChest}
+                onClose={() => setSelectedChest(null)}
+                onListingsUpdate={onListingsUpdate}
+              />
+            )}
+
+            {view === "items" && !selectedChest && (
         <div className="item-table-wrap">
           <table className="item-table">
             <thead>
@@ -513,9 +549,9 @@ function App() {
             </tbody>
           </table>
         </div>
-      )}
+          )}
 
-      {view === "stats" && !selectedChest && (
+          {view === "stats" && !selectedChest && (
         <StatCompareView
           groups={statGroups}
           selectedName={selectedStatItem}
@@ -532,9 +568,9 @@ function App() {
           }}
           search={search.trim().toLowerCase()}
         />
-      )}
+          )}
 
-      {view === "chests" && !selectedChest && (
+          {view === "chests" && !selectedChest && (
         <div className="chest-list-wrap">
           {filteredChests.length === 0 && <div className="empty">查無符合條件的箱子</div>}
           {filteredChests.map((chest) => (
@@ -570,6 +606,10 @@ function App() {
             </div>
           ))}
         </div>
+      )}
+            </>
+          )}
+        </>
       )}
     </div>
   );

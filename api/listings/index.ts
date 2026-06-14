@@ -195,19 +195,14 @@ async function handleDelete(req: VercelRequest, res: VercelResponse, id: number)
   const db = getDbClient();
 
   try {
-    // Check ownership
+    // Check listing exists and is active
     const existing = await db.execute({
-      sql: `SELECT seller_id FROM ${table} WHERE id = ? AND status = 'active'`,
+      sql: `SELECT id FROM ${table} WHERE id = ? AND status = 'active'`,
       args: [id],
     });
 
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: "not_found" });
-    }
-
-    const sellerId = String(existing.rows[0].seller_id);
-    if (sellerId !== user.discordId) {
-      return res.status(403).json({ error: "not_owner" });
     }
 
     await db.execute({

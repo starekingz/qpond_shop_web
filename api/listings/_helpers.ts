@@ -19,6 +19,10 @@ export function getListingsTable(): string {
   return process.env.VITE_TURSO_LISTINGS_TABLE || "shopmod_listings";
 }
 
+export function getOrdersTable(): string {
+  return process.env.VITE_TURSO_ORDERS_TABLE || "shopmod_orders";
+}
+
 export interface JwtPayload {
   discordId: string;
   username: string;
