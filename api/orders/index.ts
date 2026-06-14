@@ -11,6 +11,7 @@ interface OrderItem {
 
 interface CreateOrderBody {
   items: OrderItem[];
+  assignedAdminId?: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -31,13 +32,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: "method_not_allowed" });
 }
 
-// GET /api/orders?status=pending  (admin only)
+// GET /api/orders?status=pending  (admin: all orders; ?mine=true: buyer's own orders)
 async function handleGet(req: VercelRequest, res: VercelResponse) {
   const user = await verifyJwt(req);
   if (!user) return res.status(401).json({ error: "not_authenticated" });
 
   const isAdmin = await checkListingPermission(user.discordId);
-  if (!isAdmin) return res.status(403).json({ error: "insufficient_role" });
+  const mine = req.query.mine === "true";
+
+  // Non-admin can only query their own orders
+  if (!isAdmin && !mine) return res.status(403).json({ error: "insufficient_role" });
 
   const table = getOrdersTable();
   const db = getDbClient();
@@ -46,7 +50,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   try {
     let sql: string;
     let args: string[];
-    if (status) {
+
+    if (mine && !isAdmin) {
+      // Buyer: only own orders, exclude completed/cancelled
+      sql = `SELECT * FROM ${table} WHERE buyer_id = ? AND status NOT IN ('completed', 'cancelled') ORDER BY created_at DESC LIMIT 200`;
+      args = [user.discordId];
+    } else if (status) {
       sql = `SELECT * FROM ${table} WHERE status = ? ORDER BY created_at DESC LIMIT 200`;
       args = [status];
     } else {
@@ -62,6 +71,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       items: (() => { try { return JSON.parse(String(row.items)); } catch { return []; } })(),
       totalPrice: Number(row.total_price),
       status: String(row.status),
+      assignedAdminId: row.assigned_admin_id ? String(row.assigned_admin_id) : null,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));
@@ -96,13 +106,15 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
   const db = getDbClient();
 
   try {
+    const assignedAdminId = body.assignedAdminId || null;
     const result = await db.execute({
-      sql: `INSERT INTO ${table} (buyer_id, buyer_name, items, total_price) VALUES (?, ?, ?, ?)`,
+      sql: `INSERT INTO ${table} (buyer_id, buyer_name, items, total_price, assigned_admin_id) VALUES (?, ?, ?, ?, ?)`,
       args: [
         user.discordId,
         user.username,
         JSON.stringify(body.items),
         totalPrice,
+        assignedAdminId,
       ],
     });
 
@@ -113,6 +125,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       items: body.items,
       totalPrice,
       status: "pending",
+      assignedAdminId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

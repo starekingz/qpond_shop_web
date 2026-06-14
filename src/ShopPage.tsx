@@ -16,6 +16,7 @@ export default function ShopPage() {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [expandedListing, setExpandedListing] = useState<number | null>(null);
+  const [addQuantities, setAddQuantities] = useState<Record<number, number>>({});
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -108,10 +109,31 @@ export default function ShopPage() {
                     <td className="shop-price">{listing.price.toLocaleString()} $</td>
                     <td className="shop-seller">{listing.sellerName}</td>
                     <td>
-                      {user && !cartIds.has(listing.id) ? (
-                        <button className="cart-add-btn" onClick={() => addToCart(listing)}>加入購物車</button>
-                      ) : cartIds.has(listing.id) ? (
-                        <span className="cart-added-badge">已加入</span>
+                      {user ? (
+                        cartIds.has(listing.id) ? (
+                          <span className="cart-added-badge">已加入</span>
+                        ) : (
+                          <div className="shop-add-group">
+                            <div className="qty-selector">
+                              <button
+                                className="qty-btn"
+                                onClick={() => setAddQuantities((p) => ({ ...p, [listing.id]: Math.max(1, (p[listing.id] || 1) - 1) }))}
+                              >-</button>
+                              <input
+                                type="number"
+                                className="qty-input"
+                                min={1}
+                                value={addQuantities[listing.id] || 1}
+                                onChange={(e) => setAddQuantities((p) => ({ ...p, [listing.id]: Math.max(1, parseInt(e.target.value) || 1) }))}
+                              />
+                              <button
+                                className="qty-btn"
+                                onClick={() => setAddQuantities((p) => ({ ...p, [listing.id]: (p[listing.id] || 1) + 1 }))}
+                              >+</button>
+                            </div>
+                            <button className="cart-add-btn" onClick={() => addToCart(listing, addQuantities[listing.id] || 1)}>加入購物車</button>
+                          </div>
+                        )
                       ) : (
                         <span className="shop-login-hint">登入後可購買</span>
                       )}

@@ -13,6 +13,7 @@ export interface Order {
   items: OrderItem[];
   totalPrice: number;
   status: "pending" | "processing" | "completed" | "cancelled";
+  assignedAdminId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,16 +27,20 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function fetchMyOrders(): Promise<Order[]> {
+  return apiFetch<Order[]>("/api/orders?mine=true");
+}
+
 export async function fetchOrders(status?: string): Promise<Order[]> {
   const params = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiFetch<Order[]>(`/api/orders${params}`);
 }
 
-export async function createOrder(items: OrderItem[]): Promise<Order> {
+export async function createOrder(items: OrderItem[], assignedAdminId?: string): Promise<Order> {
   return apiFetch<Order>("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, assignedAdminId }),
   });
 }
 

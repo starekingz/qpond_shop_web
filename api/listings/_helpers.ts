@@ -23,6 +23,14 @@ export function getOrdersTable(): string {
   return process.env.VITE_TURSO_ORDERS_TABLE || "shopmod_orders";
 }
 
+export function getPresenceTable(): string {
+  return process.env.VITE_TURSO_PRESENCE_TABLE || "shopmod_presence";
+}
+
+export function getMessagesTable(): string {
+  return process.env.VITE_TURSO_MESSAGES_TABLE || "shopmod_messages";
+}
+
 export interface JwtPayload {
   discordId: string;
   username: string;

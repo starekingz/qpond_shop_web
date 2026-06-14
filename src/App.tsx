@@ -7,8 +7,10 @@ import { parseCustomData, parseCustomName, type CustomData } from "./loreParser"
 import { useAuth } from "./auth/AuthContext";
 import type { DiscordUser } from "./auth/AuthContext";
 import { fetchListings, createListing, cancelListing, fetchAllActiveListings, buildListingTypeMap, type Listing } from "./listings";
+import { sendPresenceHeartbeat } from "./messages";
 import ShopPage from "./ShopPage";
 import OrdersPage from "./OrdersPage";
+import MyOrdersPage from "./MyOrdersPage";
 import CartSidebar from "./cart/CartSidebar";
 import "./App.css";
 
@@ -46,7 +48,7 @@ interface StatGroup {
   statIds: string[]; // unique stat IDs across all instances
 }
 
-type ViewMode = "shop" | "items" | "chests" | "stats" | "orders";
+type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders";
 
 const STAT_LABELS: Record<string, string> = {
   ATK: "攻擊力",
@@ -99,6 +101,7 @@ function App() {
   const [sortByStat, setSortByStat] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [chestListingTypes, setChestListingTypes] = useState<Record<string, "bulk" | "single" | null>>({});
+  const [newChatOrderId, setNewChatOrderId] = useState<number | null>(null);
 
   const onListingsUpdate = useCallback((pos: string, type: "bulk" | "single" | null) => {
     setChestListingTypes((prev) => ({ ...prev, [pos]: type }));
@@ -150,6 +153,16 @@ function App() {
       .catch(() => {}); // silently ignore — card coloring is optional enhancement
     return () => { cancelled = true; };
   }, []);
+
+  // Admin presence heartbeat every 30 seconds
+  useEffect(() => {
+    if (!hasListingRole) return;
+    sendPresenceHeartbeat().catch(() => {});
+    const interval = setInterval(() => {
+      sendPresenceHeartbeat().catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [hasListingRole]);
 
   const aggregated = useMemo<AggregatedItem[]>(() => {
     if (!data) return [];
@@ -287,6 +300,14 @@ function App() {
             >
               商城
             </button>
+            {user && (
+              <button
+                className={view === "myorders" ? "nav-tab active" : "nav-tab"}
+                onClick={() => setView("myorders")}
+              >
+                我的訂單
+              </button>
+            )}
             {hasListingRole && (
               <>
                 <button
@@ -317,7 +338,7 @@ function App() {
             )}
           </nav>
           <div className="user-area">
-            <CartSidebar />
+            <CartSidebar onOrderCreated={(id) => { setNewChatOrderId(id); setView("myorders"); }} />
             {user ? (
               <div className="user-info">
                 <img
@@ -339,9 +360,10 @@ function App() {
       </header>
 
       {view === "shop" && <ShopPage />}
+      {view === "myorders" && user && <MyOrdersPage initialChatOrderId={newChatOrderId} />}
       {view === "orders" && hasListingRole && <OrdersPage />}
 
-      {hasListingRole && view !== "shop" && view !== "orders" && (
+      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && (
         <>
           <div className="meta">
             <span>箱子數: {data?.chests.length ?? 0}</span>

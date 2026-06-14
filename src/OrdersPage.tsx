@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchOrders, updateOrderStatus, type Order } from "./orders";
+import { deleteMessages } from "./messages";
+import OrderChat from "./OrderChat";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "待處理",
@@ -20,6 +22,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [chatOrderId, setChatOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +36,15 @@ export default function OrdersPage() {
 
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {
+      if (newStatus === "completed") {
+        // Delete chat messages before completing
+        await deleteMessages(id);
+      }
       await updateOrderStatus(id, newStatus);
+      // Close chat if completing/cancelling
+      if (newStatus === "completed" || newStatus === "cancelled") {
+        if (chatOrderId === id) setChatOrderId(null);
+      }
       reload();
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "操作失敗");
@@ -41,6 +52,15 @@ export default function OrdersPage() {
   };
 
   if (loading) return <div className="shop-loading">載入訂單中...</div>;
+
+  if (chatOrderId) {
+    return (
+      <div className="orders-page">
+        <button className="chat-back-btn" onClick={() => setChatOrderId(null)}>← 返回訂單列表</button>
+        <OrderChat orderId={chatOrderId} />
+      </div>
+    );
+  }
 
   return (
     <div className="orders-page">
@@ -99,6 +119,11 @@ export default function OrdersPage() {
                     {order.status === "pending" && (
                       <button className="order-btn order-btn-process" onClick={() => handleStatusChange(order.id, "processing")}>
                         接手
+                      </button>
+                    )}
+                    {(order.status === "pending" || order.status === "processing") && (
+                      <button className="order-btn order-btn-chat" onClick={() => setChatOrderId(order.id)}>
+                        聊天
                       </button>
                     )}
                     {order.status === "processing" && (
