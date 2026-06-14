@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
+    "@vercel/node": "^5.8.17",
     "adm-zip": "^0.5.17",
     "dotenv": "^17.4.2",
+    "jose": "^6.2.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
