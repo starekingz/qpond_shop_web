@@ -1,0 +1,7 @@
+node_modules
+dist
+.vercel-tmp
+scripts
+public/textures
+*.local
+.env.local

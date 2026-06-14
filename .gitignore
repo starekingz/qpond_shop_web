@@ -19,6 +19,10 @@ dist-ssr
 # Extracted textures (too large for git)
 public/textures/
 
+# Vercel
+.vercel/
+.vercel-tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
