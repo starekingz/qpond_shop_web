@@ -277,3 +277,65 @@ export function extractGrades(loreLines: LoreLine[]): Map<string, string> {
   }
   return grades;
 }
+
+// ── Build statId → Chinese label map from lore + NBT stats ──
+// Matches each NBT stat (English statId) to its Chinese display name
+// by correlating numeric values between lore lines and NBT entries.
+export function parseStatLabelMap(components: string): Map<string, string> {
+  const labels = new Map<string, string>();
+  const loreLines = parseLoreFromComponents(components);
+  const customData = parseCustomData(components);
+  if (!customData || customData.stats.length === 0 || loreLines.length === 0) return labels;
+
+  // Collect lore stat entries: { chineseName, value }
+  // Lore format per line: "攻擊力 "+40.07 "[MAX]"
+  const loreEntries: { name: string; value: number }[] = [];
+  for (const line of loreLines) {
+    let hasGrade = false;
+    for (const seg of line.segments) {
+      if (seg.text.match(/\[[A-Z]+(?:AX)?\]/)) { hasGrade = true; break; }
+    }
+    if (!hasGrade) continue;
+
+    let chineseName = "";
+    let numericValue: number | null = null;
+
+    for (const seg of line.segments) {
+      const text = seg.text.trim();
+      if (!text) continue;
+      if (text.match(/^\[[A-Z]/)) continue; // grade tag, skip
+      const numMatch = text.match(/[+-]?([\d.]+)/);
+      if (numMatch && !chineseName) {
+        // Pure numeric segment before name found — store value
+        numericValue = parseFloat(numMatch[1]);
+      } else if (!text.match(/^[+\-\d.%\s]+$/)) {
+        // Non-numeric text → Chinese stat name
+        chineseName = text.replace(/\s+$/, "");
+      } else if (numMatch && chineseName) {
+        // Numeric segment after name — update value
+        numericValue = parseFloat(numMatch[1]);
+      }
+    }
+
+    if (chineseName && numericValue !== null) {
+      loreEntries.push({ name: chineseName, value: numericValue });
+    }
+  }
+
+  // Match each NBT stat to a lore entry by value (with tolerance)
+  const usedLore = new Set<number>();
+  for (const stat of customData.stats) {
+    for (let i = 0; i < loreEntries.length; i++) {
+      if (usedLore.has(i)) continue;
+      const loreVal = loreEntries[i].value;
+      // Match if values are close (within 0.5 or 1% tolerance)
+      if (Math.abs(stat.value - loreVal) < 0.5 || Math.abs(stat.value - loreVal) / Math.max(Math.abs(stat.value), 1) < 0.01) {
+        labels.set(stat.statId, loreEntries[i].name);
+        usedLore.add(i);
+        break;
+      }
+    }
+  }
+
+  return labels;
+}

@@ -3,7 +3,7 @@ import { fetchWarehouseData } from "./turso";
 import type { WarehouseChest, WarehouseData, ChestItem } from "./turso";
 import ItemIcon from "./ItemIcon";
 import MinecraftTooltip from "./MinecraftTooltip";
-import { parseCustomData, parseCustomName, type CustomData } from "./loreParser";
+import { parseCustomData, parseCustomName, parseStatLabelMap, type CustomData } from "./loreParser";
 import { useAuth } from "./auth/AuthContext";
 import type { DiscordUser } from "./auth/AuthContext";
 import { fetchListings, createListing, cancelListing, fetchAllActiveListings, buildListingTypeMap, type Listing } from "./listings";
@@ -911,6 +911,12 @@ function StatCompareView({
     return groups.find((g) => g.itemName === selectedName) || null;
   }, [groups, selectedName]);
 
+  // Dynamic stat label map from tooltip lore (statId → Chinese name)
+  const dynamicStatLabels = useMemo(() => {
+    if (!selectedGroup || !selectedGroup.instances[0]?.itemComponents) return new Map<string, string>();
+    return parseStatLabelMap(selectedGroup.instances[0].itemComponents);
+  }, [selectedGroup]);
+
   const sortedInstances = useMemo(() => {
     if (!selectedGroup) return [];
     const instances = selectedGroup.instances.slice();
@@ -946,7 +952,7 @@ function StatCompareView({
     return m ? m[1] : "-";
   };
 
-  const statLabel = (id: string) => STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const statLabel = (id: string) => dynamicStatLabels.get(id) || STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div className="stat-compare-wrap">

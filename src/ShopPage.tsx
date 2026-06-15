@@ -4,7 +4,7 @@ import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
 import ItemIcon from "./ItemIcon";
-import { parseCustomData, parseCustomName, type CustomData } from "./loreParser";
+import { parseCustomData, parseCustomName, parseStatLabelMap, type CustomData } from "./loreParser";
 
 type SortField = "name" | "price";
 type ShopTab = "all" | "bulk" | "stats";
@@ -161,6 +161,12 @@ export default function ShopPage() {
     return shopStatGroups.find((g) => g.itemName === selectedStatGroup) || null;
   }, [shopStatGroups, selectedStatGroup]);
 
+  // Dynamic stat label map from tooltip lore (statId → Chinese name)
+  const dynamicStatLabels = useMemo(() => {
+    if (!selectedGroup || !selectedGroup.instances[0]?.listing.itemComponents) return new Map<string, string>();
+    return parseStatLabelMap(selectedGroup.instances[0].listing.itemComponents);
+  }, [selectedGroup]);
+
   const sortedInstances = useMemo(() => {
     if (!selectedGroup) return [];
     const instances = selectedGroup.instances.slice();
@@ -193,7 +199,7 @@ export default function ShopPage() {
     return m ? m[1] : "-";
   };
 
-  const statLabel = (id: string) => STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const statLabel = (id: string) => dynamicStatLabels.get(id) || STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
