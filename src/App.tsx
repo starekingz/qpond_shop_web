@@ -946,7 +946,7 @@ function StatCompareView({
     return m ? m[1] : "-";
   };
 
-  const statLabel = (id: string) => STAT_LABELS[id] || id;
+  const statLabel = (id: string) => STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div className="stat-compare-wrap">

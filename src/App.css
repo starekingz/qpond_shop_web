@@ -2610,3 +2610,12 @@ body {
   margin: 4px 0;
   font-size: 0.75rem;
 }
+
+.stat-row-clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.stat-row-clickable:hover {
+  background: rgba(255, 255, 255, 0.04);
+}

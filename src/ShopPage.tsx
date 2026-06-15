@@ -193,7 +193,7 @@ export default function ShopPage() {
     return m ? m[1] : "-";
   };
 
-  const statLabel = (id: string) => STAT_LABELS[id] || id;
+  const statLabel = (id: string) => STAT_LABELS[id] || id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -473,7 +473,7 @@ function ShopStatRow({
 
   return (
     <>
-      <tr className="stat-row">
+      <tr className="stat-row stat-row-clickable" onClick={() => setShowTooltip((v) => !v)}>
         <td className="stat-rank">{rank}</td>
         <td className="shop-price">{listing.price.toLocaleString()} $</td>
         <td className="item-count">{listing.count}</td>
@@ -500,7 +500,7 @@ function ShopStatRow({
             </td>
           );
         })}
-        <td>
+        <td onClick={(e) => e.stopPropagation()}>
           {user ? (
             maxQty === 0 ? (
               <span className="cart-added-badge">{inCart > 0 ? `已加入 (${inCart})` : "售罄"}</span>
@@ -530,13 +530,6 @@ function ShopStatRow({
           ) : (
             <span className="shop-login-hint">登入</span>
           )}
-        </td>
-      </tr>
-      <tr className="stat-tooltip-toggle-row">
-        <td colSpan={statIds.length + 6}>
-          <button className="expand-btn" onClick={() => setShowTooltip(!showTooltip)}>
-            {showTooltip ? "收起 Tooltip" : "查看 Tooltip"}
-          </button>
         </td>
       </tr>
       {showTooltip && (
