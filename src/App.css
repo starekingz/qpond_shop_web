@@ -2571,130 +2571,42 @@ body {
   border-top: 1px solid #3a3a3e;
 }
 
-/* ── Listing Stats View (admin) ── */
-.shop-stats-wrap {
-  padding: 16px;
-}
-
-.shop-stats-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.shop-stats-header h2 {
-  font-size: 1.2rem;
-  color: #e0e0e0;
-  margin: 0;
-}
-
-.shop-stats-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.shop-stats-search {
-  background: #1e1e22;
-  border: 1px solid #3a3a3e;
-  border-radius: 6px;
-  color: #e0e0e0;
-  padding: 6px 12px;
-  font-size: 0.9rem;
-  outline: none;
-  width: 220px;
-}
-
-.shop-stats-search:focus {
-  border-color: #55ffff;
-}
-
-.shop-stats-clear-sort {
-  background: #3a3a3e;
-  border: none;
-  border-radius: 6px;
-  color: #aaa;
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.shop-stats-clear-sort:hover {
-  background: #4a4a4e;
-  color: #fff;
-}
-
-.shop-stats-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.stat-sort-buttons {
+/* ── Shop stats comparison table cart cell ── */
+.shop-stat-cart-cell {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
 }
 
-.stat-sort-label {
-  font-size: 0.8rem;
-  color: #888;
-}
-
-.stat-sort-btn {
-  background: #1e1e22;
-  border: 1px solid #3a3a3e;
-  border-radius: 4px;
-  color: #aaa;
-  padding: 4px 10px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.stat-sort-btn:hover {
-  border-color: #55ffff;
-  color: #fff;
-}
-
-.stat-sort-btn.active {
-  background: #55ffff22;
-  border-color: #55ffff;
-  color: #55ffff;
-}
-
-.stat-instance {
-  background: #1e1e22;
-  border: 1px solid #3a3a3e;
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-
-.stat-instance-header {
+.qty-selector-compact {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 2px;
 }
 
-.stat-instance-price {
-  color: #ffaa00;
-  font-weight: 600;
-  font-size: 0.9rem;
+.qty-selector-compact .qty-input {
+  width: 36px;
+  font-size: 0.75rem;
+  padding: 2px 4px;
 }
 
-.stat-instance-count {
-  color: #888;
-  font-size: 0.8rem;
+.qty-selector-compact .qty-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  padding: 0;
 }
 
-.stat-instance-tooltip {
-  border-top: 1px solid #3a3a3e;
-  padding-top: 8px;
+.cart-add-btn-sm {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+}
+
+.stat-tooltip-toggle-row {
+  text-align: center;
+}
+
+.stat-tooltip-toggle-row .expand-btn {
+  margin: 4px 0;
+  font-size: 0.75rem;
 }

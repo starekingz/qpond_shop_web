@@ -4,13 +4,56 @@ import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
 import ItemIcon from "./ItemIcon";
+import { parseCustomData, parseCustomName, type CustomData } from "./loreParser";
 
 type SortField = "name" | "price";
 type ShopTab = "all" | "bulk" | "stats";
 
-interface StatGroupEntry {
+// ── Stat comparison constants (same as App.tsx) ──
+const STAT_LABELS: Record<string, string> = {
+  ATK: "攻擊力",
+  ATK_SPD: "攻擊速度",
+  WPN_DMG: "武器總傷害",
+  DEF: "防禦力",
+  HP: "生命值",
+  HP_REGEN: "生命恢復量",
+  MP: "魔量",
+  MAX_MP: "最大魔量",
+  MP_REGEN: "魔量恢復量",
+  MOVE_SPD: "移動速度",
+  MOV_SPD: "移動速度",
+  SKILL_DMG: "技能傷害",
+  CRIT_RATE: "暴擊率",
+  CRIT_DMG: "暴擊傷害",
+  TOT_DMG: "總傷害",
+  NAT_DMG: "自然傷害",
+  DRK_DMG: "暗傷害",
+  FIRE_DMG: "火焰傷害",
+  ICE_DMG: "冰凍傷害",
+  LIGHT_DMG: "雷電傷害",
+};
+
+const GRADE_COLORS: Record<string, string> = {
+  MAX: "#FF5555",
+  S: "#FFAA00",
+  A: "#55FF55",
+  B: "#55FFFF",
+  C: "#FFFF55",
+  D: "#AAAAAA",
+  F: "#AA0000",
+};
+
+// ── Shop stat types ──
+interface ShopStatInstance {
+  listing: Listing;
+  customData: CustomData;
+}
+
+interface ShopStatGroup {
   itemName: string;
-  listings: Listing[];
+  itemId: string;
+  instances: ShopStatInstance[];
+  statIds: string[];
 }
 
 export default function ShopPage() {
@@ -22,10 +65,14 @@ export default function ShopPage() {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [expandedListing, setExpandedListing] = useState<number | null>(null);
-  const [expandedStatGroup, setExpandedStatGroup] = useState<string | null>(null);
   const [addQuantities, setAddQuantities] = useState<Record<number, number>>({});
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<ShopTab>("all");
+
+  // Stats tab state
+  const [selectedStatGroup, setSelectedStatGroup] = useState<string | null>(null);
+  const [sortByStat, setSortByStat] = useState<string | null>(null);
+  const [statSortDir, setStatSortDir] = useState<"desc" | "asc">("desc");
 
   useEffect(() => {
     let cancelled = false;
@@ -65,18 +112,88 @@ export default function ShopPage() {
     });
   }, [listings, search, sortField, sortDir, tab]);
 
-  // Group single listings by itemName for stats view
-  const statGroups = useMemo<StatGroupEntry[]>(() => {
-    const map = new Map<string, Listing[]>();
-    for (const l of filtered) {
-      if (l.listingType !== "single") continue;
-      if (!map.has(l.itemName)) map.set(l.itemName, []);
-      map.get(l.itemName)!.push(l);
+  // ── Build shop stat groups from single listings with stats ──
+  const shopStatGroups = useMemo<ShopStatGroup[]>(() => {
+    const singleListings = listings.filter((l) => l.listingType === "single" && l.itemComponents);
+    const groups = new Map<string, ShopStatInstance[]>();
+    const itemIdMap = new Map<string, string>();
+
+    for (const listing of singleListings) {
+      const cd = parseCustomData(listing.itemComponents);
+      if (!cd || cd.stats.length === 0) continue;
+      const inst: ShopStatInstance = { listing, customData: cd };
+      const key = listing.itemName;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+        itemIdMap.set(key, listing.itemId);
+      }
+      groups.get(key)!.push(inst);
     }
-    return Array.from(map.entries())
-      .map(([itemName, lss]) => ({ itemName, listings: lss }))
-      .sort((a, b) => b.listings.length - a.listings.length);
-  }, [filtered]);
+
+    return Array.from(groups.entries())
+      .map(([name, instances]) => {
+        const statIdSet = new Set<string>();
+        for (const inst of instances) {
+          for (const s of inst.customData.stats) {
+            statIdSet.add(s.statId);
+          }
+        }
+        return {
+          itemName: name,
+          itemId: itemIdMap.get(name) || "",
+          instances,
+          statIds: Array.from(statIdSet),
+        };
+      })
+      .sort((a, b) => b.instances.length - a.instances.length);
+  }, [listings]);
+
+  // ── Filter stat groups by search ──
+  const filteredStatGroups = useMemo(() => {
+    const kw = search.trim().toLowerCase();
+    if (!kw) return shopStatGroups;
+    return shopStatGroups.filter((g) => g.itemName.toLowerCase().includes(kw));
+  }, [shopStatGroups, search]);
+
+  // ── Selected stat group details ──
+  const selectedGroup = useMemo(() => {
+    if (!selectedStatGroup) return null;
+    return shopStatGroups.find((g) => g.itemName === selectedStatGroup) || null;
+  }, [shopStatGroups, selectedStatGroup]);
+
+  const sortedInstances = useMemo(() => {
+    if (!selectedGroup) return [];
+    const instances = selectedGroup.instances.slice();
+    if (!sortByStat) return instances;
+
+    const getStatVal = (inst: ShopStatInstance): number | null => {
+      const s = inst.customData.stats.find((s) => s.statId === sortByStat);
+      return s ? s.value : null;
+    };
+
+    instances.sort((a, b) => {
+      const va = getStatVal(a);
+      const vb = getStatVal(b);
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return statSortDir === "desc" ? vb - va : va - vb;
+    });
+    return instances;
+  }, [selectedGroup, sortByStat, statSortDir]);
+
+  const getGrade = (inst: ShopStatInstance, statId: string): string => {
+    const stat = inst.customData.stats.find((s) => s.statId === statId);
+    if (!stat || !inst.listing.itemComponents) return "-";
+    const valStr = stat.value.toString();
+    const re = new RegExp(
+      `${valStr.replace(".", "\\.")}[\\s\\S]*?\\[([A-Z]{1,5})\\]`
+    );
+    const m = inst.listing.itemComponents.match(re);
+    return m ? m[1] : "-";
+  };
+
+  const statLabel = (id: string) => STAT_LABELS[id] || id;
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -91,10 +208,8 @@ export default function ShopPage() {
     const inCart = cartMap.get(listing.id) || 0;
     const remaining = listing.count - inCart;
     if (remaining <= 0) return;
-    const actualAdded = addToCart(listing, Math.min(qty, remaining));
-    // Update quantity display to reflect clamped value
+    addToCart(listing, Math.min(qty, remaining));
     setAddQuantities((p) => ({ ...p, [listing.id]: 1 }));
-    return actualAdded;
   };
 
   const getMaxQty = (listing: Listing) => {
@@ -124,90 +239,108 @@ export default function ShopPage() {
       <div className="shop-tabs">
         <button className={`shop-tab ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>全部</button>
         <button className={`shop-tab ${tab === "bulk" ? "active" : ""}`} onClick={() => setTab("bulk")}>胚子</button>
-        <button className={`shop-tab ${tab === "stats" ? "active" : ""}`} onClick={() => setTab("stats")}>數值</button>
+        <button className={`shop-tab ${tab === "stats" ? "active" : ""}`} onClick={() => { setTab("stats"); setSelectedStatGroup(null); setSortByStat(null); }}>數值</button>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="empty">目前沒有上架物品</div>
-      ) : tab === "stats" ? (
-        /* ── Stats view: grouped by item name ── */
-        <div className="shop-stats-view">
-          {statGroups.length === 0 ? (
-            <div className="empty">無數值商品</div>
-          ) : (
-            statGroups.map((group) => (
-              <div key={group.itemName} className="stat-group-card">
-                <div
-                  className="stat-group-header"
-                  onClick={() => setExpandedStatGroup(expandedStatGroup === group.itemName ? null : group.itemName)}
-                >
-                  <div className="stat-group-icon">
-                    <ItemIcon itemId={group.listings[0].itemId} itemComponents={group.listings[0].itemComponents} />
-                  </div>
-                  <div className="stat-group-info">
-                    <span className="stat-group-name">{group.itemName}</span>
-                    <span className="stat-group-count">{group.listings.length} 件上架</span>
-                  </div>
-                  <span className="stat-group-toggle">
-                    {expandedStatGroup === group.itemName ? "▲" : "▼"}
-                  </span>
+      {tab === "stats" ? (
+        /* ── Stats comparison view (listing-based) ── */
+        <div className="stat-compare-wrap">
+          <div className="stat-compare-sidebar">
+            <div className="stat-sidebar-title">上架中的數值物品 ({filteredStatGroups.length})</div>
+            {filteredStatGroups.length === 0 && (
+              <div className="stat-sidebar-empty">無數值商品</div>
+            )}
+            {filteredStatGroups.map((g) => (
+              <div
+                key={g.itemName}
+                className={`stat-sidebar-item ${selectedStatGroup === g.itemName ? "active" : ""}`}
+                onClick={() => { setSelectedStatGroup(g.itemName); setSortByStat(null); }}
+              >
+                <ItemIcon itemId={g.itemId} itemComponents={g.instances[0]?.listing.itemComponents} size={28} />
+                <div className="stat-sidebar-info">
+                  <span className="stat-sidebar-name">{g.itemName}</span>
+                  <span className="stat-sidebar-count">{g.instances.length} 件上架</span>
                 </div>
-                {expandedStatGroup === group.itemName && (
-                  <div className="stat-group-body">
-                    {group.listings.map((listing) => {
-                      const maxQty = getMaxQty(listing);
-                      const inCart = cartMap.get(listing.id) || 0;
-                      return (
-                        <div key={listing.id} className="stat-instance-card">
-                          <div className="stat-instance-top">
-                            <div className="stat-instance-meta">
-                              <span className="item-id">{listing.itemId}</span>
-                              <span className="shop-price">{listing.price.toLocaleString()} $</span>
-                              <span className="shop-seller">{listing.sellerName}</span>
-                              {inCart > 0 && <span className="cart-added-badge">購物車: {inCart}</span>}
-                            </div>
-                            {user && maxQty > 0 && (
-                              <div className="shop-add-group">
-                                <div className="qty-selector">
-                                  <button
-                                    className="qty-btn"
-                                    onClick={() => setAddQuantities((p) => ({ ...p, [listing.id]: Math.max(1, (p[listing.id] || 1) - 1) }))}
-                                  >-</button>
-                                  <input
-                                    type="number"
-                                    className="qty-input"
-                                    min={1}
-                                    max={maxQty}
-                                    value={addQuantities[listing.id] || 1}
-                                    onChange={(e) => setAddQuantities((p) => ({ ...p, [listing.id]: Math.min(maxQty, Math.max(1, parseInt(e.target.value) || 1)) }))}
-                                  />
-                                  <button
-                                    className="qty-btn"
-                                    onClick={() => setAddQuantities((p) => ({ ...p, [listing.id]: Math.min(maxQty, (p[listing.id] || 1) + 1) }))}
-                                  >+</button>
-                                </div>
-                                <button className="cart-add-btn" onClick={() => handleAddToCart(listing)}>加入購物車</button>
-                              </div>
-                            )}
-                            {user && maxQty === 0 && <span className="cart-added-badge">已達上限</span>}
-                            {!user && <span className="shop-login-hint">登入後可購買</span>}
-                          </div>
-                          <div className="stat-instance-tooltip">
-                            <MinecraftTooltip
-                              itemName={listing.itemName}
-                              itemComponents={listing.itemComponents}
-                              tooltipLines={listing.tooltipLines}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
-            ))
-          )}
+            ))}
+          </div>
+
+          <div className="stat-compare-main">
+            {!selectedGroup ? (
+              <div className="stat-compare-placeholder">
+                ← 選擇左側的物品來比較數值
+              </div>
+            ) : (
+              <>
+                <div className="stat-compare-header">
+                  <h3>
+                    <ItemIcon itemId={selectedGroup.itemId} itemComponents={selectedGroup.instances[0]?.listing.itemComponents} size={24} />
+                    {parseCustomName(selectedGroup.instances[0]?.listing.itemComponents || "") || selectedGroup.itemName}
+                    <span className="stat-compare-count">{selectedGroup.instances.length} 件上架</span>
+                  </h3>
+                </div>
+                <div className="stat-table-wrap">
+                  <table className="stat-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>單價</th>
+                        <th>數量</th>
+                        <th>賣家</th>
+                        <th>等級</th>
+                        {selectedGroup.statIds.map((sid) => (
+                          <th
+                            key={sid}
+                            className={`stat-sortable ${sortByStat === sid ? "sorted" : ""}`}
+                            onClick={() => {
+                              if (sortByStat === sid) {
+                                setStatSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                              } else {
+                                setSortByStat(sid);
+                                setStatSortDir("desc");
+                              }
+                            }}
+                          >
+                            {statLabel(sid)}
+                            {sortByStat === sid && (
+                              <span className="sort-arrow">{statSortDir === "desc" ? " ▼" : " ▲"}</span>
+                            )}
+                          </th>
+                        ))}
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedInstances.map((inst, i) => {
+                        const listing = inst.listing;
+                        const maxQty = getMaxQty(listing);
+                        const inCart = cartMap.get(listing.id) || 0;
+                        return (
+                          <ShopStatRow
+                            key={listing.id}
+                            inst={inst}
+                            rank={i + 1}
+                            statIds={selectedGroup.statIds}
+                            getGrade={getGrade}
+                            statLabel={statLabel}
+                            user={user}
+                            maxQty={maxQty}
+                            inCart={inCart}
+                            addQuantity={addQuantities[listing.id] || 1}
+                            onSetQuantity={(qty) => setAddQuantities((p) => ({ ...p, [listing.id]: qty }))}
+                            onAddToCart={() => handleAddToCart(listing)}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty">目前沒有上架物品</div>
       ) : (
         /* ── Table view (all / bulk) ── */
         <div className="item-table-wrap">
@@ -301,5 +434,126 @@ export default function ShopPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Shop stat comparison row ──
+function ShopStatRow({
+  inst,
+  rank,
+  statIds,
+  getGrade,
+  user,
+  maxQty,
+  inCart,
+  addQuantity,
+  onSetQuantity,
+  onAddToCart,
+}: {
+  inst: ShopStatInstance;
+  rank: number;
+  statIds: string[];
+  getGrade: (inst: ShopStatInstance, statId: string) => string;
+  statLabel: (id: string) => string;
+  user: ReturnType<typeof useAuth>["user"];
+  maxQty: number;
+  inCart: number;
+  addQuantity: number;
+  onSetQuantity: (qty: number) => void;
+  onAddToCart: () => void;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const listing = inst.listing;
+
+  const statValMap = new Map<string, number>();
+  for (const sid of statIds) {
+    const s = inst.customData.stats.find((st) => st.statId === sid);
+    if (s) statValMap.set(sid, s.value);
+  }
+
+  return (
+    <>
+      <tr className="stat-row">
+        <td className="stat-rank">{rank}</td>
+        <td className="shop-price">{listing.price.toLocaleString()} $</td>
+        <td className="item-count">{listing.count}</td>
+        <td className="shop-seller">{listing.sellerName}</td>
+        <td className="stat-level">{inst.customData.level ?? "-"}</td>
+        {statIds.map((sid) => {
+          const val = statValMap.get(sid);
+          const grade = getGrade(inst, sid);
+          const gradeColor = GRADE_COLORS[grade] || undefined;
+          return (
+            <td key={sid} className="stat-val-cell">
+              {val !== undefined ? (
+                <span className="stat-val" style={gradeColor ? { color: gradeColor } : undefined}>
+                  {val.toFixed(2)}
+                  {grade !== "-" && (
+                    <span className="stat-grade" style={gradeColor ? { color: gradeColor, borderColor: gradeColor } : undefined}>
+                      {grade}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="stat-val-na">-</span>
+              )}
+            </td>
+          );
+        })}
+        <td>
+          {user ? (
+            maxQty === 0 ? (
+              <span className="cart-added-badge">{inCart > 0 ? `已加入 (${inCart})` : "售罄"}</span>
+            ) : (
+              <div className="shop-stat-cart-cell">
+                <div className="qty-selector qty-selector-compact">
+                  <button
+                    className="qty-btn"
+                    onClick={() => onSetQuantity(Math.max(1, addQuantity - 1))}
+                  >-</button>
+                  <input
+                    type="number"
+                    className="qty-input"
+                    min={1}
+                    max={maxQty}
+                    value={addQuantity}
+                    onChange={(e) => onSetQuantity(Math.min(maxQty, Math.max(1, parseInt(e.target.value) || 1)))}
+                  />
+                  <button
+                    className="qty-btn"
+                    onClick={() => onSetQuantity(Math.min(maxQty, addQuantity + 1))}
+                  >+</button>
+                </div>
+                <button className="cart-add-btn cart-add-btn-sm" onClick={onAddToCart}>加入</button>
+              </div>
+            )
+          ) : (
+            <span className="shop-login-hint">登入</span>
+          )}
+        </td>
+      </tr>
+      <tr className="stat-tooltip-toggle-row">
+        <td colSpan={statIds.length + 6}>
+          <button className="expand-btn" onClick={() => setShowTooltip(!showTooltip)}>
+            {showTooltip ? "收起 Tooltip" : "查看 Tooltip"}
+          </button>
+        </td>
+      </tr>
+      {showTooltip && (
+        <tr className="detail-row">
+          <td colSpan={statIds.length + 6}>
+            <div className="detail-box">
+              <div className="detail-section">
+                <MinecraftTooltip
+                  itemName={listing.itemName}
+                  itemComponents={listing.itemComponents}
+                  tooltipLines={listing.tooltipLines}
+                />
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
