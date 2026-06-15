@@ -12,6 +12,7 @@ interface OrderItem {
 interface CreateOrderBody {
   items: OrderItem[];
   assignedAdminId?: string;
+  minecraftId: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -52,8 +53,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     let args: string[];
 
     if (mine && !isAdmin) {
-      // Buyer: only own orders, exclude completed/cancelled
-      sql = `SELECT * FROM ${table} WHERE buyer_id = ? AND status NOT IN ('completed', 'cancelled') ORDER BY created_at DESC LIMIT 200`;
+      // Buyer: own orders (all statuses, for history view)
+      sql = `SELECT * FROM ${table} WHERE buyer_id = ? ORDER BY created_at DESC LIMIT 200`;
       args = [user.discordId];
     } else if (status) {
       sql = `SELECT * FROM ${table} WHERE status = ? ORDER BY created_at DESC LIMIT 200`;
@@ -72,6 +73,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       totalPrice: Number(row.total_price),
       status: String(row.status),
       assignedAdminId: row.assigned_admin_id ? String(row.assigned_admin_id) : null,
+      minecraftId: row.minecraft_id ? String(row.minecraft_id) : null,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));
@@ -100,6 +102,10 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (!body.minecraftId || typeof body.minecraftId !== "string" || body.minecraftId.trim().length === 0) {
+    return res.status(400).json({ error: "missing_minecraft_id" });
+  }
+
   const totalPrice = body.items.reduce((sum, i) => sum + i.price * i.count, 0);
 
   const table = getOrdersTable();
@@ -107,14 +113,17 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
   try {
     const assignedAdminId = body.assignedAdminId || null;
+    const initialStatus = assignedAdminId ? "processing" : "pending";
     const result = await db.execute({
-      sql: `INSERT INTO ${table} (buyer_id, buyer_name, items, total_price, assigned_admin_id) VALUES (?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO ${table} (buyer_id, buyer_name, items, total_price, assigned_admin_id, minecraft_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
         user.discordId,
         user.username,
         JSON.stringify(body.items),
         totalPrice,
         assignedAdminId,
+        body.minecraftId.trim(),
+        initialStatus,
       ],
     });
 
@@ -124,8 +133,9 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       buyerName: user.username,
       items: body.items,
       totalPrice,
-      status: "pending",
+      status: initialStatus,
       assignedAdminId,
+      minecraftId: body.minecraftId.trim(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

@@ -14,6 +14,7 @@ export interface Order {
   totalPrice: number;
   status: "pending" | "processing" | "completed" | "cancelled";
   assignedAdminId: string | null;
+  minecraftId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,11 +37,11 @@ export async function fetchOrders(status?: string): Promise<Order[]> {
   return apiFetch<Order[]>(`/api/orders${params}`);
 }
 
-export async function createOrder(items: OrderItem[], assignedAdminId?: string): Promise<Order> {
+export async function createOrder(items: OrderItem[], minecraftId: string, assignedAdminId?: string): Promise<Order> {
   return apiFetch<Order>("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items, assignedAdminId }),
+    body: JSON.stringify({ items, minecraftId, assignedAdminId }),
   });
 }
 

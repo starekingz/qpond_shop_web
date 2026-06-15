@@ -12,6 +12,7 @@ import ShopPage from "./ShopPage";
 import OrdersPage from "./OrdersPage";
 import MyOrdersPage from "./MyOrdersPage";
 import CartSidebar from "./cart/CartSidebar";
+import CheckoutPage from "./CheckoutPage";
 import "./App.css";
 
 function getAvatarUrl(user: DiscordUser): string {
@@ -48,7 +49,7 @@ interface StatGroup {
   statIds: string[]; // unique stat IDs across all instances
 }
 
-type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders";
+type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders" | "checkout";
 
 const STAT_LABELS: Record<string, string> = {
   ATK: "攻擊力",
@@ -101,7 +102,7 @@ function App() {
   const [sortByStat, setSortByStat] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [chestListingTypes, setChestListingTypes] = useState<Record<string, "bulk" | "single" | null>>({});
-  const [newChatOrderId, setNewChatOrderId] = useState<number | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const onListingsUpdate = useCallback((pos: string, type: "bulk" | "single" | null) => {
     setChestListingTypes((prev) => ({ ...prev, [pos]: type }));
@@ -300,14 +301,6 @@ function App() {
             >
               商城
             </button>
-            {user && (
-              <button
-                className={view === "myorders" ? "nav-tab active" : "nav-tab"}
-                onClick={() => setView("myorders")}
-              >
-                我的訂單
-              </button>
-            )}
             {hasListingRole && (
               <>
                 <button
@@ -338,19 +331,40 @@ function App() {
             )}
           </nav>
           <div className="user-area">
-            <CartSidebar onOrderCreated={(id) => { setNewChatOrderId(id); setView("myorders"); }} />
+            <CartSidebar onNavigateCheckout={() => setView("checkout")} />
             {user ? (
-              <div className="user-info">
-                <img
-                  className="user-avatar"
-                  src={getAvatarUrl(user)}
-                  alt={user.username}
-                  width={32}
-                  height={32}
-                  referrerPolicy="no-referrer"
-                />
-                <span className="user-name">{user.username}</span>
-                <button className="logout-btn" onClick={logout}>登出</button>
+              <div className="user-menu-wrapper">
+                <button
+                  className="user-avatar-btn"
+                  onClick={() => setShowUserMenu((v) => !v)}
+                  title={user.username}
+                >
+                  <img
+                    className="user-avatar"
+                    src={getAvatarUrl(user)}
+                    alt={user.username}
+                    width={32}
+                    height={32}
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
+                {showUserMenu && (
+                  <div className="user-menu-dropdown">
+                    <div className="user-menu-name">{user.username}</div>
+                    <button
+                      className="user-menu-item"
+                      onClick={() => { setView("myorders"); setShowUserMenu(false); }}
+                    >
+                      我的訂單
+                    </button>
+                    <button
+                      className="user-menu-item user-menu-logout"
+                      onClick={() => { setShowUserMenu(false); logout(); }}
+                    >
+                      登出
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <button className="login-btn" onClick={login}>Discord 登入</button>
@@ -360,10 +374,16 @@ function App() {
       </header>
 
       {view === "shop" && <ShopPage />}
-      {view === "myorders" && user && <MyOrdersPage initialChatOrderId={newChatOrderId} />}
+      {view === "checkout" && user && (
+        <CheckoutPage
+          onBack={() => setView("shop")}
+          onOrderCreated={() => { setView("myorders"); }}
+        />
+      )}
+      {view === "myorders" && user && <MyOrdersPage />}
       {view === "orders" && hasListingRole && <OrdersPage />}
 
-      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && (
+      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && view !== "checkout" && (
         <>
           <div className="meta">
             <span>箱子數: {data?.chests.length ?? 0}</span>
