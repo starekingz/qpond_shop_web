@@ -76,6 +76,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       status: String(row.status),
       assignedAdminId: row.assigned_admin_id ? String(row.assigned_admin_id) : null,
       minecraftId: row.minecraft_id ? String(row.minecraft_id) : null,
+      inspected: Number(row.inspected ?? 0) === 1,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));
@@ -180,14 +181,29 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
   const isAdmin = await checkListingPermission(user.discordId);
   if (!isAdmin) return res.status(403).json({ error: "insufficient_role" });
 
-  const { status } = req.body as { status?: string };
+  const { status, inspected } = req.body as { status?: string; inspected?: boolean };
+
+  const table = getOrdersTable();
+  const db = getDbClient();
+
+  // Support updating inspected flag
+  if (typeof inspected === "boolean") {
+    try {
+      await db.execute({
+        sql: `UPDATE ${table} SET inspected = ?, updated_at = datetime('now') WHERE id = ?`,
+        args: [inspected ? 1 : 0, id],
+      });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("Orders PATCH inspected error:", err);
+      return res.status(500).json({ error: "internal_error" });
+    }
+  }
+
   const validStatuses = ["processing", "completed", "cancelled"];
   if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({ error: "invalid_status", valid: validStatuses });
   }
-
-  const table = getOrdersTable();
-  const db = getDbClient();
 
   try {
     const existing = await db.execute({

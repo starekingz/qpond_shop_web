@@ -17,6 +17,7 @@ export interface Order {
   status: "pending" | "processing" | "completed" | "cancelled";
   assignedAdminId: string | null;
   minecraftId: string | null;
+  inspected: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,5 +53,13 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
+  });
+}
+
+export async function markOrderInspected(id: number, inspected: boolean): Promise<void> {
+  await apiFetch(`/api/orders/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inspected }),
   });
 }

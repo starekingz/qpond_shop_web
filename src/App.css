@@ -2759,3 +2759,277 @@ body {
 .stat-row-clickable:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+
+/* ── Inspection Page ── */
+.inspection-page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.inspection-header {
+  margin-bottom: 24px;
+}
+
+.inspection-header h2 {
+  margin: 0 0 12px 0;
+  font-size: 1.4rem;
+  color: #fff;
+}
+
+.inspection-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.inspection-stat {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.inspection-stat strong {
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.inspection-stat-error strong {
+  color: #ff5555;
+}
+
+.inspection-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.inspection-filters .filter-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.inspection-filters .filter-btn.active {
+  background: #4a7dff;
+  color: #fff;
+  border-color: #4a7dff;
+}
+
+.inspection-filters .filter-btn:hover:not(.active) {
+  background: var(--surface-hover);
+  color: #fff;
+}
+
+.inspection-empty {
+  text-align: center;
+  color: #777;
+  padding: 48px 0;
+  font-size: 0.95rem;
+}
+
+.inspection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspection-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.inspection-card-error {
+  border-color: #ff5555;
+  border-left: 4px solid #ff5555;
+}
+
+.inspection-card-inspected {
+  opacity: 0.6;
+}
+
+.inspection-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.inspection-order-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inspection-order-id {
+  font-weight: 700;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.inspection-buyer {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.inspection-mc-id {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #ccc;
+  font-family: monospace;
+}
+
+.inspection-date {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.inspection-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inspection-badge-ok {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(85, 255, 85, 0.15);
+  color: #55ff55;
+}
+
+.inspection-badge-error {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(255, 85, 85, 0.15);
+  color: #ff5555;
+}
+
+.inspection-badge-warn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(255, 170, 0, 0.15);
+  color: #ffaa00;
+}
+
+.btn-confirm-inspect {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #4a7dff;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.btn-confirm-inspect:hover:not(:disabled) {
+  background: #3a6de8;
+}
+
+.btn-confirm-inspect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-undo-inspect {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.btn-undo-inspect:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: #fff;
+}
+
+.inspection-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.inspection-items-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: #777;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.inspection-items-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #ddd;
+}
+
+.inspection-item-row.row-error {
+  background: rgba(255, 85, 85, 0.08);
+}
+
+.inspection-item-row.row-error td {
+  color: #ff9999;
+}
+
+.inspection-item-row.row-warn {
+  background: rgba(255, 170, 0, 0.06);
+}
+
+.inspection-item-row.row-warn td {
+  color: #ffcc66;
+}
+
+.listing-exists {
+  color: #ffaa00;
+  font-weight: 600;
+}
+
+.listing-gone {
+  color: #55ff55;
+}
+
+.status-error {
+  color: #ff5555;
+  font-weight: 700;
+}
+
+.status-warn {
+  color: #ffaa00;
+  font-weight: 600;
+}
+
+.status-ok {
+  color: #55ff55;
+}
+
+.checkout-single-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  background: rgba(85, 255, 255, 0.12);
+  color: #55ffff;
+  font-weight: 600;
+}

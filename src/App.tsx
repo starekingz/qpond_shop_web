@@ -11,6 +11,7 @@ import { sendPresenceHeartbeat } from "./messages";
 import ShopPage from "./ShopPage";
 import OrdersPage from "./OrdersPage";
 import MyOrdersPage from "./MyOrdersPage";
+import InspectionPage from "./InspectionPage";
 import CartSidebar from "./cart/CartSidebar";
 import CheckoutPage from "./CheckoutPage";
 import "./App.css";
@@ -49,7 +50,7 @@ interface StatGroup {
   statIds: string[]; // unique stat IDs across all instances
 }
 
-type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders" | "checkout";
+type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders" | "checkout" | "inspect";
 
 const STAT_LABELS: Record<string, string> = {
   ATK: "攻擊力",
@@ -335,6 +336,12 @@ function App() {
                 >
                   訂單管理
                 </button>
+                <button
+                  className={view === "inspect" ? "nav-tab active" : "nav-tab"}
+                  onClick={() => setView("inspect")}
+                >
+                  出貨檢驗
+                </button>
               </>
             )}
           </nav>
@@ -390,8 +397,9 @@ function App() {
       )}
       {view === "myorders" && user && <MyOrdersPage />}
       {view === "orders" && hasListingRole && <OrdersPage />}
+      {view === "inspect" && hasListingRole && <InspectionPage />}
 
-      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && view !== "checkout" && (
+      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && view !== "checkout" && view !== "inspect" && (
         <>
           <div className="meta">
             <span>箱子數: {data?.chests.length ?? 0}</span>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { fetchAllActiveListings, type Listing } from "./listings";
+import { fetchOrders, type Order } from "./orders";
 import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
@@ -69,6 +70,9 @@ export default function ShopPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<ShopTab>("all");
 
+  // Sold map: listingId → total ordered qty from pending+processing orders
+  const [soldMap, setSoldMap] = useState<Map<number, number>>(new Map());
+
   // Stats tab state
   const [selectedStatGroup, setSelectedStatGroup] = useState<string | null>(null);
   const [sortByStat, setSortByStat] = useState<string | null>(null);
@@ -80,8 +84,26 @@ export default function ShopPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchAllActiveListings()
-      .then((data) => { if (!cancelled) { setListings(data); setLoading(false); } })
+    Promise.all([
+      fetchAllActiveListings(),
+      fetchOrders("pending").catch(() => [] as Order[]),
+      fetchOrders("processing").catch(() => [] as Order[]),
+    ])
+      .then(([listingsData, pendingOrders, processingOrders]) => {
+        if (cancelled) return;
+        setListings(listingsData);
+
+        // Build sold map: listingId → total ordered qty
+        const sold = new Map<number, number>();
+        const allOrders = [...pendingOrders, ...processingOrders];
+        for (const order of allOrders) {
+          for (const item of order.items) {
+            sold.set(item.listingId, (sold.get(item.listingId) || 0) + item.count);
+          }
+        }
+        setSoldMap(sold);
+        setLoading(false);
+      })
       .catch(() => { if (!cancelled) { setListings([]); setLoading(false); } });
     return () => { cancelled = true; };
   }, [reloadKey]);
@@ -233,7 +255,8 @@ export default function ShopPage() {
   const handleAddToCart = (listing: Listing) => {
     const qty = addQuantities[listing.id] || 1;
     const inCart = cartMap.get(listing.id) || 0;
-    const remaining = listing.count - inCart;
+    const sold = soldMap.get(listing.id) || 0;
+    const remaining = listing.count - sold - inCart;
     if (remaining <= 0) return;
     addToCart(listing, Math.min(qty, remaining));
     setAddQuantities((p) => ({ ...p, [listing.id]: 1 }));
@@ -241,7 +264,13 @@ export default function ShopPage() {
 
   const getMaxQty = (listing: Listing) => {
     const inCart = cartMap.get(listing.id) || 0;
-    return Math.max(0, listing.count - inCart);
+    const sold = soldMap.get(listing.id) || 0;
+    return Math.max(0, listing.count - sold - inCart);
+  };
+
+  const getAvailable = (listing: Listing) => {
+    const sold = soldMap.get(listing.id) || 0;
+    return Math.max(0, listing.count - sold);
   };
 
   if (loading) return <div className="shop-loading">載入中...</div>;
@@ -441,6 +470,7 @@ export default function ShopPage() {
                             addQuantity={addQuantities[listing.id] || 1}
                             onSetQuantity={(qty) => setAddQuantities((p) => ({ ...p, [listing.id]: qty }))}
                             onAddToCart={() => handleAddToCart(listing)}
+                            available={getAvailable(listing)}
                           />
                         );
                       })}
@@ -487,7 +517,7 @@ export default function ShopPage() {
                       {listing.listingType === "bulk" && <span className="checkout-bulk-tag">胚子</span>}
                     </td>
                     <td className="item-id">{listing.itemId}</td>
-                    <td className="item-count">{listing.count}</td>
+                    <td className="item-count">{getAvailable(listing)}</td>
                     <td className="shop-price">{listing.price.toLocaleString()} $</td>
                     <td className="shop-seller">{listing.sellerName}</td>
                     <td>
@@ -561,6 +591,7 @@ function ShopStatRow({
   addQuantity,
   onSetQuantity,
   onAddToCart,
+  available,
 }: {
   inst: ShopStatInstance;
   rank: number;
@@ -573,6 +604,7 @@ function ShopStatRow({
   addQuantity: number;
   onSetQuantity: (qty: number) => void;
   onAddToCart: () => void;
+  available: number;
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const listing = inst.listing;
@@ -588,7 +620,7 @@ function ShopStatRow({
       <tr className="stat-row stat-row-clickable" onClick={() => setShowTooltip((v) => !v)}>
         <td className="stat-rank">{rank}</td>
         <td className="shop-price">{listing.price.toLocaleString()} $</td>
-        <td className="item-count">{listing.count}</td>
+        <td className="item-count">{available}</td>
         <td className="shop-seller">{listing.sellerName}</td>
         <td className="stat-level">{inst.customData.level ?? "-"}</td>
         {statIds.map((sid) => {
