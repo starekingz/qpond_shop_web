@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchOrders, updateOrderStatus, type Order } from "./orders";
+import { fetchAllActiveListings, type Listing } from "./listings";
 import { deleteMessages } from "./messages";
 import OrderChat from "./OrderChat";
 import MinecraftTooltip from "./MinecraftTooltip";
@@ -26,14 +27,43 @@ export default function OrdersPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [chatOrderId, setChatOrderId] = useState<number | null>(null);
+  const [listingMap, setListingMap] = useState<Map<number, Listing>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
-    fetchOrders(filter || undefined)
-      .then((data) => { if (!cancelled) { setOrders(data); setLoading(false); } })
+    Promise.all([
+      fetchOrders(filter || undefined),
+      fetchAllActiveListings(),
+    ])
+      .then(([orderData, listingData]) => {
+        if (!cancelled) {
+          setOrders(orderData);
+          const map = new Map<number, Listing>();
+          for (const l of listingData) map.set(l.id, l);
+          setListingMap(map);
+          setLoading(false);
+        }
+      })
       .catch(() => { if (!cancelled) { setOrders([]); setLoading(false); } });
     return () => { cancelled = true; };
   }, [filter, reloadKey]);
+
+  // Enrich order items with missing listingType/itemComponents from listing map
+  const enrichedOrders = useMemo(() =>
+    orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => {
+        if (item.listingType && item.itemComponents) return item;
+        const listing = listingMap.get(item.listingId);
+        return {
+          ...item,
+          listingType: item.listingType ?? listing?.listingType,
+          itemComponents: item.itemComponents ?? listing?.itemComponents,
+        };
+      }),
+    })),
+    [orders, listingMap]
+  );
 
   const reload = () => setReloadKey((k) => k + 1);
 
@@ -79,11 +109,11 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {orders.length === 0 ? (
+      {enrichedOrders.length === 0 ? (
         <div className="empty">暫無訂單</div>
       ) : (
         <div className="admin-order-list">
-          {orders.map((order) => {
+          {enrichedOrders.map((order) => {
             const isExpanded = expandedOrder === order.id;
             const canAct = order.status === "pending" || order.status === "processing";
             return (

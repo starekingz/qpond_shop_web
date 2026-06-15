@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchMyOrders, type Order } from "./orders";
+import { fetchAllActiveListings, type Listing } from "./listings";
 import OrderChat from "./OrderChat";
 import MinecraftTooltip from "./MinecraftTooltip";
 import ItemIcon from "./ItemIcon";
@@ -31,14 +32,42 @@ export default function MyOrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [chatOrderId, setChatOrderId] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [listingMap, setListingMap] = useState<Map<number, Listing>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
-    fetchMyOrders()
-      .then((data) => { if (!cancelled) { setOrders(data); setLoading(false); } })
+    Promise.all([
+      fetchMyOrders(),
+      fetchAllActiveListings(),
+    ])
+      .then(([orderData, listingData]) => {
+        if (!cancelled) {
+          setOrders(orderData);
+          const map = new Map<number, Listing>();
+          for (const l of listingData) map.set(l.id, l);
+          setListingMap(map);
+          setLoading(false);
+        }
+      })
       .catch(() => { if (!cancelled) { setOrders([]); setLoading(false); } });
     return () => { cancelled = true; };
   }, [reloadKey]);
+
+  const enrichedOrders = useMemo(() =>
+    orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => {
+        if (item.listingType && item.itemComponents) return item;
+        const listing = listingMap.get(item.listingId);
+        return {
+          ...item,
+          listingType: item.listingType ?? listing?.listingType,
+          itemComponents: item.itemComponents ?? listing?.itemComponents,
+        };
+      }),
+    })),
+    [orders, listingMap]
+  );
 
   if (loading) return <div className="shop-loading">載入訂單中...</div>;
 
@@ -52,8 +81,8 @@ export default function MyOrdersPage() {
     );
   }
 
-  const activeOrders = orders.filter(isActive);
-  const historyOrders = orders.filter((o) => !isActive(o));
+  const activeOrders = enrichedOrders.filter(isActive);
+  const historyOrders = enrichedOrders.filter((o) => !isActive(o));
   const displayedOrders = tab === "active" ? activeOrders : historyOrders;
 
   return (
