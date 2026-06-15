@@ -39,7 +39,7 @@ export default function InspectionPage() {
     return m;
   }, [listings]);
 
-  // Warehouse lookup: "x,y,z,slot,itemId" → current count
+  // Warehouse lookups
   const warehouseMap = useMemo(() => {
     const m = new Map<string, number>();
     if (!warehouseData) return m;
@@ -53,12 +53,31 @@ export default function InspectionPage() {
     return m;
   }, [warehouseData]);
 
+  // Fallback: "slot,itemId" → count (for double-chest position mismatch)
+  const warehouseFallback = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      for (const item of chest.items) {
+        const key = `${item.slot},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
   // Get current warehouse quantity for a listing
   const getWarehouseQty = (listing: Listing): number | null => {
     if (!warehouseData) return null;
-    const key = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
-    const qty = warehouseMap.get(key);
-    return qty ?? 0;
+    // Try exact position match first
+    const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
+    const exactQty = warehouseMap.get(exactKey);
+    if (exactQty !== undefined) return exactQty;
+    // Fallback: match by slot+itemId
+    const fbKey = `${listing.slot},${listing.itemId}`;
+    const fbQty = warehouseFallback.get(fbKey);
+    if (fbQty !== undefined) return fbQty;
+    return 0;
   };
 
   // Build total ordered per listing from uninspected completed orders

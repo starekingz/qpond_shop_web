@@ -114,8 +114,9 @@ export default function ShopPage() {
     return () => { cancelled = true; };
   }, [reloadKey]);
 
-  // Build warehouse lookup: "x,y,z,slot,itemId" → current count
+  // Build warehouse lookups
   const warehouseMap = useMemo(() => {
+    // Primary: exact match "x,y,z,slot,itemId"
     const m = new Map<string, number>();
     if (!warehouseData) return m;
     for (const chest of warehouseData.chests) {
@@ -128,13 +129,31 @@ export default function ShopPage() {
     return m;
   }, [warehouseData]);
 
+  // Fallback: "slot,itemId" → count (aggregated, for double-chest position mismatch)
+  const warehouseFallback = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      for (const item of chest.items) {
+        const key = `${item.slot},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
   // Get live warehouse quantity for a listing (fallback to listing.count if no warehouse data)
   const getLiveQty = (listing: Listing): number => {
     if (!warehouseData) return listing.count; // fallback if warehouse not loaded
-    const key = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
-    const whQty = warehouseMap.get(key);
-    if (whQty === undefined) return 0; // item not found in warehouse
-    return whQty;
+    // Try exact position match first
+    const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
+    const exactQty = warehouseMap.get(exactKey);
+    if (exactQty !== undefined) return exactQty;
+    // Fallback: match by slot+itemId (handles double-chest position mismatch)
+    const fbKey = `${listing.slot},${listing.itemId}`;
+    const fbQty = warehouseFallback.get(fbKey);
+    if (fbQty !== undefined) return fbQty;
+    return 0; // item truly not found
   };
 
   const cartMap = useMemo(() => {
