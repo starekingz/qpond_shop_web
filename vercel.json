@@ -3,6 +3,7 @@
   "rewrites": [
     { "source": "/api/listings/:id", "destination": "/api/listings" },
     { "source": "/api/orders/:id", "destination": "/api/orders" },
+    { "source": "/api/anomalies/:id", "destination": "/api/anomalies" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

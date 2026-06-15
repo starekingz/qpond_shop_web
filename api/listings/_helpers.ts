@@ -31,6 +31,10 @@ export function getMessagesTable(): string {
   return process.env.VITE_TURSO_MESSAGES_TABLE || "shopmod_messages";
 }
 
+export function getAnomaliesTable(): string {
+  return process.env.VITE_TURSO_ANOMALIES_TABLE || "shopmod_anomalies";
+}
+
 export interface JwtPayload {
   discordId: string;
   username: string;
