@@ -251,16 +251,91 @@ export default function ShopPage() {
       <div className="shop-header">
         <h2>商城</h2>
         <div className="shop-controls">
-          <button
-            className={`equip-filter-btn ${selectedEquipTypes.size > 0 ? "active" : ""}`}
-            onClick={() => setShowEquipFilter((v) => !v)}
-            title="篩選裝備部位"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-            </svg>
-            {selectedEquipTypes.size > 0 && <span className="filter-badge">{selectedEquipTypes.size}</span>}
-          </button>
+          <div className="equip-filter-wrapper">
+            <button
+              className={`equip-filter-btn ${selectedEquipTypes.size > 0 ? "active" : ""}`}
+              onClick={() => setShowEquipFilter((v) => !v)}
+              title="篩選裝備部位"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              {selectedEquipTypes.size > 0 && <span className="filter-badge">{selectedEquipTypes.size}</span>}
+            </button>
+
+            {showEquipFilter && (
+              <>
+                <div className="equip-filter-backdrop" onClick={() => setShowEquipFilter(false)} />
+                <div className="equip-filter-popup">
+                  <div className="equip-filter-header">
+                    <span className="equip-filter-title">篩選裝備部位</span>
+                    {selectedEquipTypes.size > 0 && (
+                      <button
+                        className="equip-filter-clear"
+                        onClick={() => setSelectedEquipTypes(new Set())}
+                      >清除</button>
+                    )}
+                  </div>
+                  <div className="equip-filter-groups">
+                    <div className="equip-filter-group">
+                      <span className="equip-filter-group-label">防具</span>
+                      <div className="equip-filter-chips">
+                        {(["頭盔", "胸甲", "護腿", "靴子"] as EquipmentType[]).map((t) => (
+                          <button
+                            key={t}
+                            className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                            onClick={() => {
+                              setSelectedEquipTypes((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(t)) next.delete(t); else next.add(t);
+                                return next;
+                              });
+                            }}
+                          >{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="equip-filter-group">
+                      <span className="equip-filter-group-label">飾品</span>
+                      <div className="equip-filter-chips">
+                        {(["肩飾", "腰帶", "披風", "手套"] as EquipmentType[]).map((t) => (
+                          <button
+                            key={t}
+                            className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                            onClick={() => {
+                              setSelectedEquipTypes((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(t)) next.delete(t); else next.add(t);
+                                return next;
+                              });
+                            }}
+                          >{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="equip-filter-group">
+                      <span className="equip-filter-group-label">武器</span>
+                      <div className="equip-filter-chips">
+                        {(["劍", "杖", "弓", "匕首"] as EquipmentType[]).map((t) => (
+                          <button
+                            key={t}
+                            className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                            onClick={() => {
+                              setSelectedEquipTypes((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(t)) next.delete(t); else next.add(t);
+                                return next;
+                              });
+                            }}
+                          >{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <input
             className="search-input"
             type="text"
@@ -271,77 +346,6 @@ export default function ShopPage() {
           <button className="refresh-btn" onClick={() => setReloadKey((k) => k + 1)}>重新整理</button>
         </div>
       </div>
-
-      {/* ── Equipment filter panel ── */}
-      {showEquipFilter && (
-        <div className="equip-filter-panel">
-          <div className="equip-filter-header">
-            <span className="equip-filter-title">篩選裝備部位</span>
-            {selectedEquipTypes.size > 0 && (
-              <button
-                className="equip-filter-clear"
-                onClick={() => setSelectedEquipTypes(new Set())}
-              >清除</button>
-            )}
-          </div>
-          <div className="equip-filter-groups">
-            <div className="equip-filter-group">
-              <span className="equip-filter-group-label">防具</span>
-              <div className="equip-filter-chips">
-                {(["頭盔", "胸甲", "護腿", "靴子"] as EquipmentType[]).map((t) => (
-                  <button
-                    key={t}
-                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
-                    onClick={() => {
-                      setSelectedEquipTypes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(t)) next.delete(t); else next.add(t);
-                        return next;
-                      });
-                    }}
-                  >{t}</button>
-                ))}
-              </div>
-            </div>
-            <div className="equip-filter-group">
-              <span className="equip-filter-group-label">飾品</span>
-              <div className="equip-filter-chips">
-                {(["肩飾", "腰帶", "披風", "手套"] as EquipmentType[]).map((t) => (
-                  <button
-                    key={t}
-                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
-                    onClick={() => {
-                      setSelectedEquipTypes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(t)) next.delete(t); else next.add(t);
-                        return next;
-                      });
-                    }}
-                  >{t}</button>
-                ))}
-              </div>
-            </div>
-            <div className="equip-filter-group">
-              <span className="equip-filter-group-label">武器</span>
-              <div className="equip-filter-chips">
-                {(["劍", "杖", "弓", "匕首"] as EquipmentType[]).map((t) => (
-                  <button
-                    key={t}
-                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
-                    onClick={() => {
-                      setSelectedEquipTypes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(t)) next.delete(t); else next.add(t);
-                        return next;
-                      });
-                    }}
-                  >{t}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Tabs ── */}
       <div className="shop-tabs">

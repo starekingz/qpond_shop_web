@@ -1100,7 +1100,11 @@ body {
   align-items: center;
 }
 
-/* ── Equipment filter button + panel ── */
+/* ── Equipment filter button + popup overlay ── */
+.equip-filter-wrapper {
+  position: relative;
+}
+
 .equip-filter-btn {
   display: flex;
   align-items: center;
@@ -1136,12 +1140,36 @@ body {
   border-radius: 10px;
 }
 
-.equip-filter-panel {
+.equip-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgba(0, 0, 0, 0.35);
+  animation: equip-fade-in 0.15s ease-out;
+}
+
+.equip-filter-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 340px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 14px 16px;
-  margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: equip-popup-in 0.18s ease-out;
+}
+
+@keyframes equip-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes equip-popup-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .equip-filter-header {
@@ -1173,8 +1201,8 @@ body {
 
 .equip-filter-groups {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .equip-filter-group {
