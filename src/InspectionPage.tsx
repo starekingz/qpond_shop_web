@@ -53,7 +53,21 @@ export default function InspectionPage() {
     return m;
   }, [warehouseData]);
 
-  // Fallback: "slot,itemId" → count (for double-chest position mismatch)
+  // Fallback 1: "x,y,z,itemId" → total count in same chest
+  const warehouseChestItem = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      const { x, y, z } = chest.pos;
+      for (const item of chest.items) {
+        const key = `${x},${y},${z},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
+  // Fallback 2: "slot,itemId" → count (double-chest position mismatch)
   const warehouseFallback = useMemo(() => {
     const m = new Map<string, number>();
     if (!warehouseData) return m;
@@ -69,14 +83,18 @@ export default function InspectionPage() {
   // Get current warehouse quantity for a listing
   const getWarehouseQty = (listing: Listing): number | null => {
     if (!warehouseData) return null;
-    // Try exact position match first
+    // Tier 1: exact match
     const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
     const exactQty = warehouseMap.get(exactKey);
-    if (exactQty !== undefined) return exactQty;
-    // Fallback: match by slot+itemId
+    if (exactQty !== undefined && exactQty > 0) return exactQty;
+    // Tier 2: same chest + same itemId
+    const chestKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.itemId}`;
+    const chestQty = warehouseChestItem.get(chestKey);
+    if (chestQty !== undefined && chestQty > 0) return chestQty;
+    // Tier 3: slot+itemId across all chests
     const fbKey = `${listing.slot},${listing.itemId}`;
     const fbQty = warehouseFallback.get(fbKey);
-    if (fbQty !== undefined) return fbQty;
+    if (fbQty !== undefined && fbQty > 0) return fbQty;
     return 0;
   };
 

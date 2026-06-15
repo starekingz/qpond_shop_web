@@ -129,7 +129,21 @@ export default function ShopPage() {
     return m;
   }, [warehouseData]);
 
-  // Fallback: "slot,itemId" → count (aggregated, for double-chest position mismatch)
+  // Fallback 1: "x,y,z,itemId" → total count in same chest (handles items moved between slots)
+  const warehouseChestItem = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      const { x, y, z } = chest.pos;
+      for (const item of chest.items) {
+        const key = `${x},${y},${z},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
+  // Fallback 2: "slot,itemId" → count (handles double-chest position mismatch)
   const warehouseFallback = useMemo(() => {
     const m = new Map<string, number>();
     if (!warehouseData) return m;
@@ -144,17 +158,20 @@ export default function ShopPage() {
 
   // Get live warehouse quantity for a listing
   const getLiveQty = (listing: Listing): number => {
-    if (!warehouseData) return listing.count; // warehouse not loaded, use listing count
-    // Try exact position match first
+    if (!warehouseData) return listing.count;
+    // Tier 1: exact match "x,y,z,slot,itemId"
     const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
     const exactQty = warehouseMap.get(exactKey);
     if (exactQty !== undefined && exactQty > 0) return exactQty;
-    // Fallback: match by slot+itemId (handles double-chest position mismatch)
+    // Tier 2: same chest + same itemId (items may have moved between slots)
+    const chestKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.itemId}`;
+    const chestQty = warehouseChestItem.get(chestKey);
+    if (chestQty !== undefined && chestQty > 0) return chestQty;
+    // Tier 3: slot+itemId across all chests (double-chest position mismatch)
     const fbKey = `${listing.slot},${listing.itemId}`;
     const fbQty = warehouseFallback.get(fbKey);
     if (fbQty !== undefined && fbQty > 0) return fbQty;
-    // Warehouse shows 0 or not found — trust listing count
-    // (admin should cancel listing if items are truly gone)
+    // All lookups returned 0 or not found — trust listing count
     return listing.count;
   };
 
