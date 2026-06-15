@@ -349,9 +349,52 @@ export const EQUIPMENT_TYPES = [
 
 export type EquipmentType = typeof EQUIPMENT_TYPES[number];
 
+// Chinese name variants → canonical EquipmentType
+const EQUIP_NAME_MAP: Record<string, EquipmentType> = {
+  // 防具
+  "頭盔": "頭盔", "頭": "頭盔", "帽子": "頭盔", "頭飾": "頭盔",
+  "胸甲": "胸甲", "胸": "胸甲", "胸鎧": "胸甲", "護胸": "胸甲",
+  "護腿": "護腿", "腿": "護腿", "護脛": "護腿", "褲": "護腿",
+  "靴子": "靴子", "靴": "靴子", "鞋": "靴子",
+  // 飾品
+  "肩飾": "肩飾", "肩": "肩飾", "肩甲": "肩飾", "護肩": "肩飾",
+  "腰帶": "腰帶", "腰": "腰帶", "皮帶": "腰帶",
+  "披風": "披風", "斗篷": "披風", "披肩": "披風",
+  "手套": "手套", "手": "手套", "護手": "手套",
+  // 武器
+  "劍": "劍", "大劍": "劍", "太刀": "劍", "長劍": "劍",
+  "杖": "杖", "法杖": "杖", "魔杖": "杖", "權杖": "杖",
+  "弓": "弓", "長弓": "弓",
+  "匕首": "匕首", "短刀": "匕首", "小刀": "匕首",
+};
+
+// ── Resolve a Chinese equipment name to canonical EquipmentType ──
+function resolveEquipName(name: string): EquipmentType | null {
+  const trimmed = name.trim();
+  if (EQUIP_NAME_MAP[trimmed]) return EQUIP_NAME_MAP[trimmed];
+  // Fuzzy: check if any key is contained in the name
+  for (const [key, val] of Object.entries(EQUIP_NAME_MAP)) {
+    if (trimmed.includes(key)) return val;
+  }
+  return null;
+}
+
 // ── Determine equipment type from itemComponents and itemId ──
 export function parseEquipmentType(components: string | undefined, itemId: string): EquipmentType | null {
-  // Check base_material from custom_data
+  // 1. Check tooltip lore for "裝備類型: XXX" or "武器類型: XXX"
+  if (components) {
+    const loreLines = parseLoreFromComponents(components);
+    for (const line of loreLines) {
+      const fullText = line.segments.map((s) => s.text).join("");
+      const match = fullText.match(/(?:裝備類型|武器類型)[：:]\s*(.+?)(?:\s|$)/);
+      if (match) {
+        const resolved = resolveEquipName(match[1]);
+        if (resolved) return resolved;
+      }
+    }
+  }
+
+  // 2. Check base_material from custom_data
   if (components) {
     const bmMatch = components.match(/base_material:"([^"]+)"/);
     if (bmMatch) {
@@ -365,7 +408,7 @@ export function parseEquipmentType(components: string | undefined, itemId: strin
     }
   }
 
-  // Check itemId for custom qp_item types
+  // 3. Check itemId for custom qp_item types
   const id = itemId.toLowerCase();
   const idPart = id.includes(":") ? id.split(":")[1] : id;
 
