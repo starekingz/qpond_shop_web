@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkListingPermission, getDbClient, getOrdersTable } from "../listings/_helpers.js";
+import { verifyJwt, checkListingPermission, getDbClient, getOrdersTable, getMessagesTable } from "../listings/_helpers.js";
 
 interface OrderItem {
   listingId: number;
@@ -127,8 +127,33 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       ],
     });
 
+    const orderId = Number(result.lastInsertRowid);
+
+    // Auto-send shopping list summary as a system message
+    try {
+      const msgTable = getMessagesTable();
+      const lines = body.items.map((i) => `• ${i.itemName} x${i.count} — ${(i.price * i.count).toLocaleString()} $`);
+      const summary = [
+        `📋 訂單 #${orderId} 購物清單`,
+        `買家: ${user.username}`,
+        `MC ID: ${body.minecraftId.trim()}`,
+        ``,
+        ...lines,
+        ``,
+        `總計: ${totalPrice.toLocaleString()} $`,
+      ].join("\n");
+
+      await db.execute({
+        sql: `INSERT INTO ${msgTable} (order_id, sender_id, sender_name, content) VALUES (?, ?, ?, ?)`,
+        args: [orderId, "system", "系統", summary],
+      });
+    } catch (msgErr) {
+      console.error("Failed to insert order summary message:", msgErr);
+      // Non-fatal: order still succeeds even if summary message fails
+    }
+
     return res.status(201).json({
-      id: Number(result.lastInsertRowid),
+      id: orderId,
       buyerId: user.discordId,
       buyerName: user.username,
       items: body.items,

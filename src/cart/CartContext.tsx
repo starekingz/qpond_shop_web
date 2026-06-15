@@ -9,7 +9,7 @@ export interface CartItem {
 
 interface CartContextValue {
   cartItems: CartItem[];
-  addToCart: (listing: Listing, quantity?: number) => void;
+  addToCart: (listing: Listing, quantity?: number) => number;
   updateQuantity: (listingId: number, qty: number) => void;
   removeFromCart: (listingId: number) => void;
   clearCart: () => void;
@@ -22,23 +22,33 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
-  const addToCart = useCallback((listing: Listing, quantity = 1) => {
+  const addToCart = useCallback((listing: Listing, quantity = 1): number => {
+    const maxQty = listing.count;
+    let addedQty = 0;
     setCartItems((prev) => {
       const existing = prev.find((i) => i.listing.id === listing.id);
       if (existing) {
-        // Already in cart — increase quantity
+        const newQty = Math.min(existing.quantity + quantity, maxQty);
+        addedQty = newQty - existing.quantity;
         return prev.map((i) =>
-          i.listing.id === listing.id ? { ...i, quantity: i.quantity + quantity } : i
+          i.listing.id === listing.id ? { ...i, quantity: newQty } : i
         );
       }
-      return [...prev, { listing, quantity }];
+      const clampedQty = Math.min(quantity, maxQty);
+      addedQty = clampedQty;
+      return [...prev, { listing, quantity: clampedQty }];
     });
+    return addedQty;
   }, []);
 
   const updateQuantity = useCallback((listingId: number, qty: number) => {
     if (qty < 1) return;
     setCartItems((prev) =>
-      prev.map((i) => (i.listing.id === listingId ? { ...i, quantity: qty } : i))
+      prev.map((i) => {
+        if (i.listing.id !== listingId) return i;
+        const clampedQty = Math.min(qty, i.listing.count);
+        return { ...i, quantity: clampedQty };
+      })
     );
   }, []);
 

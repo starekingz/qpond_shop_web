@@ -77,6 +77,14 @@ export default function OrderChat({ orderId, onClose }: OrderChatProps) {
           <div className="chat-empty">尚無訊息，發送第一則訊息開始對話吧！</div>
         )}
         {messages.map((msg) => {
+          const isSystem = msg.senderId === "system";
+          if (isSystem) {
+            return (
+              <div key={msg.id} className="chat-system-msg">
+                <pre className="chat-system-content">{msg.content}</pre>
+              </div>
+            );
+          }
           const isMe = user && msg.senderId === user.discordId;
           return (
             <div key={msg.id} className={`chat-bubble-wrap ${isMe ? "chat-mine" : "chat-other"}`}>

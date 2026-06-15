@@ -40,7 +40,7 @@ export default function CartSidebar({ onNavigateCheckout }: CartSidebarProps) {
                       <div className="cart-qty-controls">
                         <button className="qty-btn-sm" onClick={() => updateQuantity(ci.listing.id, ci.quantity - 1)} disabled={ci.quantity <= 1}>-</button>
                         <span className="cart-qty-display">{ci.quantity}</span>
-                        <button className="qty-btn-sm" onClick={() => updateQuantity(ci.listing.id, ci.quantity + 1)}>+</button>
+                        <button className="qty-btn-sm" onClick={() => updateQuantity(ci.listing.id, ci.quantity + 1)} disabled={ci.quantity >= ci.listing.count}>+</button>
                       </div>
                     </div>
                     <button className="cart-remove-btn" onClick={() => removeFromCart(ci.listing.id)}>移除</button>
