@@ -1100,6 +1100,126 @@ body {
   align-items: center;
 }
 
+/* ── Equipment filter button + panel ── */
+.equip-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.equip-filter-btn:hover,
+.equip-filter-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(85, 255, 255, 0.06);
+}
+
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--accent);
+  color: #000;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+.equip-filter-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.equip-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.equip-filter-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.equip-filter-clear {
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  background: rgba(255, 85, 85, 0.12);
+  border: 1px solid rgba(255, 85, 85, 0.4);
+  border-radius: 4px;
+  color: #FF5555;
+  cursor: pointer;
+}
+
+.equip-filter-clear:hover {
+  background: rgba(255, 85, 85, 0.25);
+}
+
+.equip-filter-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+
+.equip-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.equip-filter-group-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  min-width: 28px;
+}
+
+.equip-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.equip-chip {
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.equip-chip:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.equip-chip.active {
+  background: rgba(85, 255, 255, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .shop-loading {
   text-align: center;
   padding: 60px 0;

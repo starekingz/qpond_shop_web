@@ -4,7 +4,7 @@ import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
 import ItemIcon from "./ItemIcon";
-import { parseCustomData, parseCustomName, parseStatLabelMap, type CustomData } from "./loreParser";
+import { parseCustomData, parseCustomName, parseStatLabelMap, parseEquipmentType, type CustomData, type EquipmentType } from "./loreParser";
 
 type SortField = "name" | "price";
 type ShopTab = "all" | "bulk" | "stats";
@@ -74,6 +74,10 @@ export default function ShopPage() {
   const [sortByStat, setSortByStat] = useState<string | null>(null);
   const [statSortDir, setStatSortDir] = useState<"desc" | "asc">("desc");
 
+  // Equipment filter state
+  const [selectedEquipTypes, setSelectedEquipTypes] = useState<Set<EquipmentType>>(new Set());
+  const [showEquipFilter, setShowEquipFilter] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     fetchAllActiveListings()
@@ -96,6 +100,14 @@ export default function ShopPage() {
     if (tab === "bulk") items = items.filter((l) => l.listingType === "bulk");
     else if (tab === "stats") items = items.filter((l) => l.listingType === "single");
 
+    // Equipment type filter
+    if (selectedEquipTypes.size > 0) {
+      items = items.filter((l) => {
+        const eqType = parseEquipmentType(l.itemComponents, l.itemId);
+        return eqType !== null && selectedEquipTypes.has(eqType);
+      });
+    }
+
     if (kw) {
       items = items.filter(
         (l) =>
@@ -110,7 +122,7 @@ export default function ShopPage() {
       else cmp = a.itemName.localeCompare(b.itemName);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [listings, search, sortField, sortDir, tab]);
+  }, [listings, search, sortField, sortDir, tab, selectedEquipTypes]);
 
   // ── Build shop stat groups from single listings with stats ──
   const shopStatGroups = useMemo<ShopStatGroup[]>(() => {
@@ -148,12 +160,21 @@ export default function ShopPage() {
       .sort((a, b) => b.instances.length - a.instances.length);
   }, [listings]);
 
-  // ── Filter stat groups by search ──
+  // ── Filter stat groups by search and equipment type ──
   const filteredStatGroups = useMemo(() => {
+    let groups = shopStatGroups;
     const kw = search.trim().toLowerCase();
-    if (!kw) return shopStatGroups;
-    return shopStatGroups.filter((g) => g.itemName.toLowerCase().includes(kw));
-  }, [shopStatGroups, search]);
+    if (kw) groups = groups.filter((g) => g.itemName.toLowerCase().includes(kw));
+    if (selectedEquipTypes.size > 0) {
+      groups = groups.filter((g) => {
+        const firstListing = g.instances[0]?.listing;
+        if (!firstListing) return false;
+        const eqType = parseEquipmentType(firstListing.itemComponents, firstListing.itemId);
+        return eqType !== null && selectedEquipTypes.has(eqType);
+      });
+    }
+    return groups;
+  }, [shopStatGroups, search, selectedEquipTypes]);
 
   // ── Selected stat group details ──
   const selectedGroup = useMemo(() => {
@@ -230,6 +251,16 @@ export default function ShopPage() {
       <div className="shop-header">
         <h2>商城</h2>
         <div className="shop-controls">
+          <button
+            className={`equip-filter-btn ${selectedEquipTypes.size > 0 ? "active" : ""}`}
+            onClick={() => setShowEquipFilter((v) => !v)}
+            title="篩選裝備部位"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            {selectedEquipTypes.size > 0 && <span className="filter-badge">{selectedEquipTypes.size}</span>}
+          </button>
           <input
             className="search-input"
             type="text"
@@ -240,6 +271,77 @@ export default function ShopPage() {
           <button className="refresh-btn" onClick={() => setReloadKey((k) => k + 1)}>重新整理</button>
         </div>
       </div>
+
+      {/* ── Equipment filter panel ── */}
+      {showEquipFilter && (
+        <div className="equip-filter-panel">
+          <div className="equip-filter-header">
+            <span className="equip-filter-title">篩選裝備部位</span>
+            {selectedEquipTypes.size > 0 && (
+              <button
+                className="equip-filter-clear"
+                onClick={() => setSelectedEquipTypes(new Set())}
+              >清除</button>
+            )}
+          </div>
+          <div className="equip-filter-groups">
+            <div className="equip-filter-group">
+              <span className="equip-filter-group-label">防具</span>
+              <div className="equip-filter-chips">
+                {(["頭盔", "胸甲", "護腿", "靴子"] as EquipmentType[]).map((t) => (
+                  <button
+                    key={t}
+                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedEquipTypes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(t)) next.delete(t); else next.add(t);
+                        return next;
+                      });
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="equip-filter-group">
+              <span className="equip-filter-group-label">飾品</span>
+              <div className="equip-filter-chips">
+                {(["肩飾", "腰帶", "披風", "手套"] as EquipmentType[]).map((t) => (
+                  <button
+                    key={t}
+                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedEquipTypes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(t)) next.delete(t); else next.add(t);
+                        return next;
+                      });
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="equip-filter-group">
+              <span className="equip-filter-group-label">武器</span>
+              <div className="equip-filter-chips">
+                {(["劍", "杖", "弓", "匕首"] as EquipmentType[]).map((t) => (
+                  <button
+                    key={t}
+                    className={`equip-chip ${selectedEquipTypes.has(t) ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedEquipTypes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(t)) next.delete(t); else next.add(t);
+                        return next;
+                      });
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Tabs ── */}
       <div className="shop-tabs">

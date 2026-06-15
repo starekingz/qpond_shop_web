@@ -339,3 +339,48 @@ export function parseStatLabelMap(components: string): Map<string, string> {
 
   return labels;
 }
+
+// ── Equipment type constants ──
+export const EQUIPMENT_TYPES = [
+  "頭盔", "胸甲", "護腿", "靴子",
+  "肩飾", "腰帶", "披風", "手套",
+  "劍", "杖", "弓", "匕首",
+] as const;
+
+export type EquipmentType = typeof EQUIPMENT_TYPES[number];
+
+// ── Determine equipment type from itemComponents and itemId ──
+export function parseEquipmentType(components: string | undefined, itemId: string): EquipmentType | null {
+  // Check base_material from custom_data
+  if (components) {
+    const bmMatch = components.match(/base_material:"([^"]+)"/);
+    if (bmMatch) {
+      const bm = bmMatch[1].toLowerCase();
+      if (bm.endsWith("_helmet")) return "頭盔";
+      if (bm.endsWith("_chestplate")) return "胸甲";
+      if (bm.endsWith("_leggings")) return "護腿";
+      if (bm.endsWith("_boots")) return "靴子";
+      if (bm.endsWith("_sword")) return "劍";
+      if (bm === "minecraft:bow" || bm.endsWith("_bow")) return "弓";
+    }
+  }
+
+  // Check itemId for custom qp_item types
+  const id = itemId.toLowerCase();
+  const idPart = id.includes(":") ? id.split(":")[1] : id;
+
+  if (/helmet|helm|頭|帽/.test(idPart)) return "頭盔";
+  if (/chestplate|chest|胸|甲/.test(idPart)) return "胸甲";
+  if (/leggings|legs|leg|護腿|褲/.test(idPart)) return "護腿";
+  if (/boots|boot|靴/.test(idPart)) return "靴子";
+  if (/shoulder|肩/.test(idPart)) return "肩飾";
+  if (/belt|腰/.test(idPart)) return "腰帶";
+  if (/cape|cloak|披風/.test(idPart)) return "披風";
+  if (/gloves|glove|手套/.test(idPart)) return "手套";
+  if (/sword|劍/.test(idPart)) return "劍";
+  if (/staff|wand|杖/.test(idPart)) return "杖";
+  if (/bow|弓/.test(idPart)) return "弓";
+  if (/dagger|匕首/.test(idPart)) return "匕首";
+
+  return null;
+}

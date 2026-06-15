@@ -301,6 +301,14 @@ function App() {
             >
               商城
             </button>
+            {user && (
+              <button
+                className={view === "myorders" ? "nav-tab active" : "nav-tab"}
+                onClick={() => setView("myorders")}
+              >
+                我的訂單
+              </button>
+            )}
             {hasListingRole && (
               <>
                 <button
