@@ -4,6 +4,8 @@ export interface OrderItem {
   itemId: string;
   count: number;
   price: number;
+  listingType?: "single" | "bulk";
+  itemComponents?: string;
 }
 
 export interface Order {

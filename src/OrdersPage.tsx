@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { fetchOrders, updateOrderStatus, type Order } from "./orders";
 import { deleteMessages } from "./messages";
 import OrderChat from "./OrderChat";
+import MinecraftTooltip from "./MinecraftTooltip";
+import ItemIcon from "./ItemIcon";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "待處理",
@@ -22,6 +24,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [chatOrderId, setChatOrderId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -37,11 +40,9 @@ export default function OrdersPage() {
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {
       if (newStatus === "completed") {
-        // Delete chat messages before completing
         await deleteMessages(id);
       }
       await updateOrderStatus(id, newStatus);
-      // Close chat if completing/cancelling
       if (newStatus === "completed" || newStatus === "cancelled") {
         if (chatOrderId === id) setChatOrderId(null);
       }
@@ -81,66 +82,102 @@ export default function OrdersPage() {
       {orders.length === 0 ? (
         <div className="empty">暫無訂單</div>
       ) : (
-        <div className="item-table-wrap">
-          <table className="item-table orders-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>買家</th>
-                <th>物品</th>
-                <th>總價</th>
-                <th>狀態</th>
-                <th>建立時間</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id} className="order-row">
-                  <td className="order-id">#{order.id}</td>
-                  <td>{order.buyerName}</td>
-                  <td className="order-items-cell">
-                    {order.items.map((item, i) => (
-                      <span key={i} className="order-item-tag">
-                        {item.itemName} &times;{item.count}
-                      </span>
-                    ))}
-                  </td>
-                  <td className="shop-price">{order.totalPrice.toLocaleString()} $</td>
-                  <td>
+        <div className="admin-order-list">
+          {orders.map((order) => {
+            const isExpanded = expandedOrder === order.id;
+            const canAct = order.status === "pending" || order.status === "processing";
+            return (
+              <div key={order.id} className={`admin-order-card ${isExpanded ? "expanded" : ""}`}>
+                <div
+                  className="admin-order-header clickable"
+                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                >
+                  <div className="admin-order-left">
+                    <span className="order-id">#{order.id}</span>
+                    <span className="admin-order-buyer">{order.buyerName}</span>
                     <span className="order-status" style={{ color: STATUS_COLORS[order.status] }}>
                       {STATUS_LABELS[order.status]}
                     </span>
-                  </td>
-                  <td className="order-time">
-                    {new Date(order.createdAt).toLocaleString("zh-TW")}
-                  </td>
-                  <td className="order-actions">
-                    {order.status === "pending" && (
-                      <button className="order-btn order-btn-process" onClick={() => handleStatusChange(order.id, "processing")}>
-                        接手
-                      </button>
+                  </div>
+                  <div className="admin-order-right">
+                    <span className="shop-price">{order.totalPrice.toLocaleString()} $</span>
+                    <span className="expand-arrow">{isExpanded ? "▲" : "▼"}</span>
+                  </div>
+                </div>
+
+                <div className="admin-order-items">
+                  {order.items.map((item, i) => (
+                    <span key={i} className="order-item-tag">
+                      {item.itemName} &times;{item.count}
+                    </span>
+                  ))}
+                </div>
+
+                {isExpanded && (
+                  <div className="order-detail-expand">
+                    <div className="admin-order-meta">
+                      <span>買家: <strong>{order.buyerName}</strong></span>
+                      {order.minecraftId && <span>MC ID: <strong>{order.minecraftId}</strong></span>}
+                      <span>時間: {new Date(order.createdAt).toLocaleString("zh-TW")}</span>
+                    </div>
+
+                    <div className="order-detail-items">
+                      {order.items.map((item, i) => {
+                        const isBulk = item.listingType === "bulk";
+                        return (
+                          <div key={i} className="order-detail-item">
+                            <div className="order-detail-item-header">
+                              <div className="order-detail-item-icon">
+                                <ItemIcon itemId={item.itemId} itemComponents={item.itemComponents} />
+                              </div>
+                              <div className="order-detail-item-info">
+                                <span className="order-detail-item-name">{item.itemName}</span>
+                                <span className="order-detail-item-id">{item.itemId}</span>
+                                {isBulk && <span className="checkout-bulk-tag">胚子</span>}
+                              </div>
+                              <div className="order-detail-item-price">
+                                <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
+                                <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                              </div>
+                            </div>
+                            {!isBulk && item.itemComponents && (
+                              <div className="order-detail-tooltip">
+                                <MinecraftTooltip
+                                  itemName={item.itemName}
+                                  itemComponents={item.itemComponents}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {canAct && (
+                      <div className="admin-order-actions">
+                        {order.status === "pending" && (
+                          <button className="order-btn order-btn-process" onClick={() => handleStatusChange(order.id, "processing")}>
+                            接手
+                          </button>
+                        )}
+                        <button className="order-btn order-btn-chat" onClick={() => setChatOrderId(order.id)}>
+                          聊天
+                        </button>
+                        {order.status === "processing" && (
+                          <button className="order-btn order-btn-complete" onClick={() => handleStatusChange(order.id, "completed")}>
+                            完成
+                          </button>
+                        )}
+                        <button className="order-btn order-btn-cancel" onClick={() => handleStatusChange(order.id, "cancelled")}>
+                          取消
+                        </button>
+                      </div>
                     )}
-                    {(order.status === "pending" || order.status === "processing") && (
-                      <button className="order-btn order-btn-chat" onClick={() => setChatOrderId(order.id)}>
-                        聊天
-                      </button>
-                    )}
-                    {order.status === "processing" && (
-                      <button className="order-btn order-btn-complete" onClick={() => handleStatusChange(order.id, "completed")}>
-                        完成
-                      </button>
-                    )}
-                    {(order.status === "pending" || order.status === "processing") && (
-                      <button className="order-btn order-btn-cancel" onClick={() => handleStatusChange(order.id, "cancelled")}>
-                        取消
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

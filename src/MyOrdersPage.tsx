@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchMyOrders, type Order } from "./orders";
 import OrderChat from "./OrderChat";
+import MinecraftTooltip from "./MinecraftTooltip";
+import ItemIcon from "./ItemIcon";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "待處理",
@@ -26,7 +28,8 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabMode>("active");
-  const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
+  const [chatOrderId, setChatOrderId] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -40,11 +43,11 @@ export default function MyOrdersPage() {
   if (loading) return <div className="shop-loading">載入訂單中...</div>;
 
   // If viewing a chat
-  if (selectedOrder) {
+  if (chatOrderId) {
     return (
       <div className="my-orders-page">
-        <button className="chat-back-btn" onClick={() => setSelectedOrder(null)}>← 返回訂單列表</button>
-        <OrderChat orderId={selectedOrder} />
+        <button className="chat-back-btn" onClick={() => setChatOrderId(null)}>← 返回訂單列表</button>
+        <OrderChat orderId={chatOrderId} />
       </div>
     );
   }
@@ -82,36 +85,86 @@ export default function MyOrdersPage() {
         </div>
       ) : (
         <div className="my-order-list">
-          {displayedOrders.map((order) => (
-            <div
-              key={order.id}
-              className={`my-order-card ${isActive(order) ? "clickable" : ""}`}
-              onClick={() => { if (isActive(order)) setSelectedOrder(order.id); }}
-            >
-              <div className="my-order-card-header">
-                <span className="order-id">#{order.id}</span>
-                <span className="order-status" style={{ color: STATUS_COLORS[order.status] }}>
-                  {STATUS_LABELS[order.status]}
-                </span>
-              </div>
-              <div className="my-order-items">
-                {order.items.map((item, i) => (
-                  <span key={i} className="order-item-tag">
-                    {item.itemName} &times;{item.count}
-                  </span>
-                ))}
-              </div>
-              <div className="my-order-meta">
-                {order.minecraftId && (
-                  <span className="order-mc-id">MC ID: {order.minecraftId}</span>
+          {displayedOrders.map((order) => {
+            const isExpanded = expandedOrder === order.id;
+            return (
+              <div key={order.id} className={`my-order-card ${isExpanded ? "expanded" : ""}`}>
+                <div
+                  className="my-order-card-header clickable"
+                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                >
+                  <div className="my-order-card-title">
+                    <span className="order-id">#{order.id}</span>
+                    <span className="order-status" style={{ color: STATUS_COLORS[order.status] }}>
+                      {STATUS_LABELS[order.status]}
+                    </span>
+                  </div>
+                  <span className="expand-arrow">{isExpanded ? "▲" : "▼"}</span>
+                </div>
+
+                <div className="my-order-items">
+                  {order.items.map((item, i) => (
+                    <span key={i} className="order-item-tag">
+                      {item.itemName} &times;{item.count}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="my-order-footer">
+                  <span className="shop-price">{order.totalPrice.toLocaleString()} $</span>
+                  <span className="order-time">{new Date(order.createdAt).toLocaleString("zh-TW")}</span>
+                </div>
+
+                {/* ── Expanded detail ── */}
+                {isExpanded && (
+                  <div className="order-detail-expand">
+                    {order.minecraftId && (
+                      <div className="order-detail-mc">MC ID: <strong>{order.minecraftId}</strong></div>
+                    )}
+                    <div className="order-detail-items">
+                      {order.items.map((item, i) => {
+                        const isBulk = item.listingType === "bulk";
+                        return (
+                          <div key={i} className="order-detail-item">
+                            <div className="order-detail-item-header">
+                              <div className="order-detail-item-icon">
+                                <ItemIcon itemId={item.itemId} itemComponents={item.itemComponents} />
+                              </div>
+                              <div className="order-detail-item-info">
+                                <span className="order-detail-item-name">{item.itemName}</span>
+                                <span className="order-detail-item-id">{item.itemId}</span>
+                                {isBulk && <span className="checkout-bulk-tag">胚子</span>}
+                              </div>
+                              <div className="order-detail-item-price">
+                                <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
+                                <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                              </div>
+                            </div>
+                            {!isBulk && item.itemComponents && (
+                              <div className="order-detail-tooltip">
+                                <MinecraftTooltip
+                                  itemName={item.itemName}
+                                  itemComponents={item.itemComponents}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {isActive(order) && (
+                      <button
+                        className="order-chat-enter-btn"
+                        onClick={() => setChatOrderId(order.id)}
+                      >
+                        進入聊天室
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              <div className="my-order-footer">
-                <span className="shop-price">{order.totalPrice.toLocaleString()} $</span>
-                <span className="order-time">{new Date(order.createdAt).toLocaleString("zh-TW")}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
