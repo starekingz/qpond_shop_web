@@ -142,18 +142,20 @@ export default function ShopPage() {
     return m;
   }, [warehouseData]);
 
-  // Get live warehouse quantity for a listing (fallback to listing.count if no warehouse data)
+  // Get live warehouse quantity for a listing
   const getLiveQty = (listing: Listing): number => {
-    if (!warehouseData) return listing.count; // fallback if warehouse not loaded
+    if (!warehouseData) return listing.count; // warehouse not loaded, use listing count
     // Try exact position match first
     const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
     const exactQty = warehouseMap.get(exactKey);
-    if (exactQty !== undefined) return exactQty;
+    if (exactQty !== undefined && exactQty > 0) return exactQty;
     // Fallback: match by slot+itemId (handles double-chest position mismatch)
     const fbKey = `${listing.slot},${listing.itemId}`;
     const fbQty = warehouseFallback.get(fbKey);
-    if (fbQty !== undefined) return fbQty;
-    return 0; // item truly not found
+    if (fbQty !== undefined && fbQty > 0) return fbQty;
+    // Warehouse shows 0 or not found — trust listing count
+    // (admin should cancel listing if items are truly gone)
+    return listing.count;
   };
 
   const cartMap = useMemo(() => {
