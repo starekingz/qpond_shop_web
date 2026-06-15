@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchOrders, markOrderInspected, type Order } from "./orders";
+import { fetchOrders, markOrderInspected, type Order, type OrderItem } from "./orders";
 import { fetchAllActiveListings, type Listing } from "./listings";
+import { fetchWarehouseData, type WarehouseData } from "./turso";
 import { useAuth } from "./auth/AuthContext";
 
 type InspectionFilter = "pending" | "all";
@@ -9,6 +10,7 @@ export default function InspectionPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [warehouseData, setWarehouseData] = useState<WarehouseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<InspectionFilter>("pending");
   const [confirming, setConfirming] = useState<number | null>(null);
@@ -18,11 +20,13 @@ export default function InspectionPage() {
     Promise.all([
       fetchOrders("completed").catch(() => [] as Order[]),
       fetchAllActiveListings().catch(() => [] as Listing[]),
+      fetchWarehouseData().catch(() => null),
     ])
-      .then(([orderData, listingData]) => {
+      .then(([orderData, listingData, whData]) => {
         if (cancelled) return;
         setOrders(orderData);
         setListings(listingData);
+        setWarehouseData(whData);
         setLoading(false);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
@@ -35,10 +39,88 @@ export default function InspectionPage() {
     return m;
   }, [listings]);
 
+  // Warehouse lookup: "x,y,z,slot,itemId" → current count
+  const warehouseMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      const { x, y, z } = chest.pos;
+      for (const item of chest.items) {
+        const key = `${x},${y},${z},${item.slot},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
+  // Get current warehouse quantity for a listing
+  const getWarehouseQty = (listing: Listing): number | null => {
+    if (!warehouseData) return null;
+    const key = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
+    const qty = warehouseMap.get(key);
+    return qty ?? 0;
+  };
+
+  // Build total ordered per listing from uninspected completed orders
+  const totalOrderedPerListing = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const order of orders) {
+      if (order.inspected) continue;
+      for (const item of order.items) {
+        m.set(item.listingId, (m.get(item.listingId) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     if (filter === "pending") return orders.filter((o) => !o.inspected);
     return orders;
   }, [orders, filter]);
+
+  // Get item status with warehouse-based validation
+  const getItemStatus = (item: OrderItem): {
+    status: "ok" | "error" | "warning";
+    listedCount: number | null;
+    warehouseCount: number | null;
+    totalOrdered: number;
+    diff: number | null;
+  } => {
+    const listing = listingMap.get(item.listingId);
+    const totalOrdered = totalOrderedPerListing.get(item.listingId) || 0;
+
+    if (!listing) {
+      // Listing no longer active — can't validate with warehouse
+      return { status: "warning", listedCount: null, warehouseCount: null, totalOrdered, diff: null };
+    }
+
+    const whQty = getWarehouseQty(listing);
+    if (whQty === null) {
+      // No warehouse data
+      return { status: "warning", listedCount: listing.count, warehouseCount: null, totalOrdered, diff: null };
+    }
+
+    const decrease = listing.count - whQty;
+    const diff = decrease - totalOrdered;
+
+    if (diff === 0) {
+      return { status: "ok", listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
+    }
+    return { status: "error", listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
+  };
+
+  const getOrderStatus = (order: Order): "ok" | "error" | "warning" => {
+    let hasError = false;
+    let hasWarning = false;
+    for (const item of order.items) {
+      const { status } = getItemStatus(item);
+      if (status === "error") hasError = true;
+      if (status === "warning") hasWarning = true;
+    }
+    if (hasError) return "error";
+    if (hasWarning) return "warning";
+    return "ok";
+  };
 
   const handleInspect = async (orderId: number) => {
     setConfirming(orderId);
@@ -64,38 +146,6 @@ export default function InspectionPage() {
     }
   };
 
-  // Check if an item has a shipping issue
-  const getItemStatus = (item: Order["items"][0]): "ok" | "error" | "warning" => {
-    const listing = listingMap.get(item.listingId);
-
-    if (!listing) {
-      // Listing no longer exists (already shipped or removed)
-      return "ok";
-    }
-
-    if (item.listingType === "bulk") {
-      // For bulk: listing still exists — might be okay if count was reduced
-      // We can't know the original count, so show warning (needs manual check)
-      return "warning";
-    }
-
-    // Single item still has active listing — likely not shipped
-    return "error";
-  };
-
-  const getOrderStatus = (order: Order): "ok" | "error" | "warning" => {
-    let hasError = false;
-    let hasWarning = false;
-    for (const item of order.items) {
-      const status = getItemStatus(item);
-      if (status === "error") hasError = true;
-      if (status === "warning") hasWarning = true;
-    }
-    if (hasError) return "error";
-    if (hasWarning) return "warning";
-    return "ok";
-  };
-
   if (!user) return <div className="inspection-page">請先登入</div>;
   if (loading) return <div className="inspection-page">載入中...</div>;
 
@@ -113,6 +163,11 @@ export default function InspectionPage() {
           {errorCount > 0 && (
             <span className="inspection-stat inspection-stat-error">
               有問題：<strong>{errorCount}</strong>
+            </span>
+          )}
+          {!warehouseData && (
+            <span className="inspection-stat inspection-stat-error">
+              ⚠ 倉儲資料載入失敗，無法驗證庫存
             </span>
           )}
         </div>
@@ -191,18 +246,18 @@ export default function InspectionPage() {
                     <tr>
                       <th>物品名稱</th>
                       <th>類型</th>
+                      <th>上架數量</th>
+                      <th>倉儲目前</th>
+                      <th>已出貨</th>
                       <th>訂購數量</th>
-                      <th>Listing 狀態</th>
-                      <th>目前庫存</th>
                       <th>結果</th>
                     </tr>
                   </thead>
                   <tbody>
                     {order.items.map((item, idx) => {
-                      const listing = listingMap.get(item.listingId);
-                      const status = getItemStatus(item);
+                      const result = getItemStatus(item);
                       return (
-                        <tr key={idx} className={`inspection-item-row ${status === "error" ? "row-error" : status === "warning" ? "row-warn" : ""}`}>
+                        <tr key={idx} className={`inspection-item-row ${result.status === "error" ? "row-error" : result.status === "warning" ? "row-warn" : ""}`}>
                           <td>{item.itemName}</td>
                           <td>
                             {item.listingType === "bulk" ? (
@@ -211,19 +266,28 @@ export default function InspectionPage() {
                               <span className="checkout-single-tag">單件</span>
                             )}
                           </td>
+                          <td>{result.listedCount ?? "-"}</td>
+                          <td>{result.warehouseCount ?? "-"}</td>
+                          <td>
+                            {result.listedCount !== null && result.warehouseCount !== null
+                              ? result.listedCount - result.warehouseCount
+                              : "-"}
+                          </td>
                           <td>{item.count}</td>
                           <td>
-                            {listing ? (
-                              <span className="listing-exists">仍存在</span>
-                            ) : (
-                              <span className="listing-gone">已下架</span>
+                            {result.status === "error" && result.diff !== null && (
+                              <span className="status-error">
+                                {result.diff > 0
+                                  ? `多扣 ${result.diff}`
+                                  : `少扣 ${Math.abs(result.diff)}`}
+                              </span>
                             )}
-                          </td>
-                          <td>{listing ? listing.count : "-"}</td>
-                          <td>
-                            {status === "error" && <span className="status-error">未出貨</span>}
-                            {status === "warning" && <span className="status-warn">需確認數量</span>}
-                            {status === "ok" && <span className="status-ok">正確</span>}
+                            {result.status === "warning" && (
+                              <span className="status-warn">無法驗證</span>
+                            )}
+                            {result.status === "ok" && (
+                              <span className="status-ok">正確</span>
+                            )}
                           </td>
                         </tr>
                       );

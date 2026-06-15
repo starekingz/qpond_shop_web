@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { fetchAllActiveListings, type Listing } from "./listings";
 import { fetchOrders, type Order } from "./orders";
+import { fetchWarehouseData, type WarehouseData } from "./turso";
 import { useCart } from "./cart/CartContext";
 import { useAuth } from "./auth/AuthContext";
 import MinecraftTooltip from "./MinecraftTooltip";
@@ -73,6 +74,9 @@ export default function ShopPage() {
   // Sold map: listingId → total ordered qty from pending+processing orders
   const [soldMap, setSoldMap] = useState<Map<number, number>>(new Map());
 
+  // Warehouse live quantity map: "x,y,z,slot,itemId" → current count
+  const [warehouseData, setWarehouseData] = useState<WarehouseData | null>(null);
+
   // Stats tab state
   const [selectedStatGroup, setSelectedStatGroup] = useState<string | null>(null);
   const [sortByStat, setSortByStat] = useState<string | null>(null);
@@ -88,10 +92,12 @@ export default function ShopPage() {
       fetchAllActiveListings(),
       fetchOrders("pending").catch(() => [] as Order[]),
       fetchOrders("processing").catch(() => [] as Order[]),
+      fetchWarehouseData().catch(() => null),
     ])
-      .then(([listingsData, pendingOrders, processingOrders]) => {
+      .then(([listingsData, pendingOrders, processingOrders, whData]) => {
         if (cancelled) return;
         setListings(listingsData);
+        setWarehouseData(whData);
 
         // Build sold map: listingId → total ordered qty
         const sold = new Map<number, number>();
@@ -107,6 +113,29 @@ export default function ShopPage() {
       .catch(() => { if (!cancelled) { setListings([]); setLoading(false); } });
     return () => { cancelled = true; };
   }, [reloadKey]);
+
+  // Build warehouse lookup: "x,y,z,slot,itemId" → current count
+  const warehouseMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!warehouseData) return m;
+    for (const chest of warehouseData.chests) {
+      const { x, y, z } = chest.pos;
+      for (const item of chest.items) {
+        const key = `${x},${y},${z},${item.slot},${item.itemId}`;
+        m.set(key, (m.get(key) || 0) + item.count);
+      }
+    }
+    return m;
+  }, [warehouseData]);
+
+  // Get live warehouse quantity for a listing (fallback to listing.count if no warehouse data)
+  const getLiveQty = (listing: Listing): number => {
+    if (!warehouseData) return listing.count; // fallback if warehouse not loaded
+    const key = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
+    const whQty = warehouseMap.get(key);
+    if (whQty === undefined) return 0; // item not found in warehouse
+    return whQty;
+  };
 
   const cartMap = useMemo(() => {
     const m = new Map<number, number>();
@@ -256,7 +285,8 @@ export default function ShopPage() {
     const qty = addQuantities[listing.id] || 1;
     const inCart = cartMap.get(listing.id) || 0;
     const sold = soldMap.get(listing.id) || 0;
-    const remaining = listing.count - sold - inCart;
+    const liveQty = getLiveQty(listing);
+    const remaining = liveQty - sold - inCart;
     if (remaining <= 0) return;
     addToCart(listing, Math.min(qty, remaining));
     setAddQuantities((p) => ({ ...p, [listing.id]: 1 }));
@@ -265,12 +295,14 @@ export default function ShopPage() {
   const getMaxQty = (listing: Listing) => {
     const inCart = cartMap.get(listing.id) || 0;
     const sold = soldMap.get(listing.id) || 0;
-    return Math.max(0, listing.count - sold - inCart);
+    const liveQty = getLiveQty(listing);
+    return Math.max(0, liveQty - sold - inCart);
   };
 
   const getAvailable = (listing: Listing) => {
     const sold = soldMap.get(listing.id) || 0;
-    return Math.max(0, listing.count - sold);
+    const liveQty = getLiveQty(listing);
+    return Math.max(0, liveQty - sold);
   };
 
   if (loading) return <div className="shop-loading">載入中...</div>;
