@@ -1144,8 +1144,6 @@ body {
   position: fixed;
   inset: 0;
   z-index: 99;
-  background: rgba(0, 0, 0, 0.35);
-  animation: equip-fade-in 0.15s ease-out;
 }
 
 .equip-filter-popup {
@@ -1154,17 +1152,11 @@ body {
   left: 0;
   z-index: 100;
   min-width: 340px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   animation: equip-popup-in 0.18s ease-out;
-}
-
-@keyframes equip-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 
 @keyframes equip-popup-in {
