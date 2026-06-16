@@ -6,6 +6,7 @@ export interface OrderItem {
   price: number;
   listingType?: "single" | "bulk";
   itemComponents?: string;
+  listingCount?: number;
 }
 
 export interface Order {

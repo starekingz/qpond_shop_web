@@ -73,11 +73,7 @@ export default function InspectionPage() {
     let cancelled = false;
     Promise.all([
       fetchOrders("completed").catch(() => [] as Order[]),
-      Promise.all([
-        fetchOrders("pending").catch(() => [] as Order[]),
-        fetchOrders("processing").catch(() => [] as Order[]),
-        fetchOrders("completed").catch(() => [] as Order[]),
-      ]).then(([p, pr, c]) => [...p, ...pr, ...c]),
+      fetchOrders().catch(() => [] as Order[]),
       fetchAllActiveListings().catch(() => [] as Listing[]),
       fetchWarehouseData().catch(() => null),
       fetchAnomalies().catch(() => [] as Anomaly[]),
@@ -174,13 +170,35 @@ export default function InspectionPage() {
   const getItemStatus = (item: OrderItem) => {
     const listing = listingMap.get(item.listingId);
     const totalOrdered = totalOrderedPerListing.get(item.listingId) || 0;
-    if (!listing) return { status: "warning" as const, listedCount: null, warehouseCount: null, totalOrdered, diff: null };
+    // Use stored listingCount snapshot (from order time) for accurate calculation
+    const originalCount = item.listingCount ?? listing?.count ?? item.count;
+
+    if (!listing) {
+      // Listing no longer exists — item was taken out of warehouse (shipped)
+      // The entire listing count was removed, so decrease = originalCount
+      const decrease = originalCount;
+      const diff = decrease - totalOrdered;
+      if (diff === 0) {
+        return { status: "ok" as const, listedCount: originalCount, warehouseCount: 0, totalOrdered, diff };
+      }
+      // For bulk: listing gone but not all were ordered → show discrepancy
+      return { status: "error" as const, listedCount: originalCount, warehouseCount: 0, totalOrdered, diff };
+    }
+
     const whQty = getWarehouseQty(listing);
-    if (whQty === null) return { status: "warning" as const, listedCount: listing.count, warehouseCount: null, totalOrdered, diff: null };
-    const decrease = listing.count - whQty;
+    if (whQty === null) {
+      return { status: "warning" as const, listedCount: originalCount, warehouseCount: null, totalOrdered, diff: null };
+    }
+
+    // Use the larger of original snapshot vs current listing.count as baseline
+    // (listing count may have been updated since the order was placed)
+    const baseline = Math.max(originalCount, listing.count);
+    const decrease = baseline - whQty;
     const diff = decrease - totalOrdered;
-    if (diff === 0) return { status: "ok" as const, listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
-    return { status: "error" as const, listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
+    if (diff === 0) {
+      return { status: "ok" as const, listedCount: baseline, warehouseCount: whQty, totalOrdered, diff };
+    }
+    return { status: "error" as const, listedCount: baseline, warehouseCount: whQty, totalOrdered, diff };
   };
 
   const getOrderStatus = (order: Order): "ok" | "error" | "warning" => {

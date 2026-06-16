@@ -46,6 +46,7 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
         price: ci.listing.price,
         listingType: ci.listing.listingType,
         itemComponents: ci.listing.itemComponents,
+        listingCount: ci.listing.count,
       }));
       const order = await createOrder(items, minecraftId.trim(), selectedAdmin || undefined);
       clearCart();
