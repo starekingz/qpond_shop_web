@@ -14,6 +14,15 @@ export interface OrderItem {
   listingCount?: number;
 }
 
+export interface InspectionResultItem {
+  listingId: number;
+  status: "ok" | "error" | "warning";
+  listedCount: number | null;
+  warehouseCount: number | null;
+  totalOrdered: number;
+  diff: number | null;
+}
+
 export interface Order {
   id: number;
   buyerId: string;
@@ -24,6 +33,7 @@ export interface Order {
   assignedAdminId: string | null;
   minecraftId: string | null;
   inspected: boolean;
+  inspectionResult: InspectionResultItem[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,10 +72,10 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
   });
 }
 
-export async function markOrderInspected(id: number, inspected: boolean): Promise<void> {
+export async function markOrderInspected(id: number, inspected: boolean, inspectionResult?: InspectionResultItem[]): Promise<void> {
   await apiFetch(`/api/orders/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ inspected }),
+    body: JSON.stringify({ inspected, inspectionResult }),
   });
 }

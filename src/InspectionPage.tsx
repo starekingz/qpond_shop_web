@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchOrders, markOrderInspected, type Order, type OrderItem } from "./orders";
+import { fetchOrders, markOrderInspected, type Order, type OrderItem, type InspectionResultItem } from "./orders";
 import { fetchAllActiveListings, type Listing } from "./listings";
 import { fetchWarehouseData, type WarehouseData } from "./turso";
 import { useAuth } from "./auth/AuthContext";
@@ -236,6 +236,17 @@ export default function InspectionPage() {
   };
 
   const getOrderStatus = (order: Order): "ok" | "error" | "warning" => {
+    // Use stored result for inspected orders
+    if (order.inspected && order.inspectionResult) {
+      let hasError = false, hasWarning = false;
+      for (const r of order.inspectionResult) {
+        if (r.status === "error") hasError = true;
+        if (r.status === "warning") hasWarning = true;
+      }
+      if (hasError) return "error";
+      if (hasWarning) return "warning";
+      return "ok";
+    }
     let hasError = false, hasWarning = false;
     for (const item of order.items) {
       const { status } = getItemStatus(item);
@@ -250,8 +261,18 @@ export default function InspectionPage() {
   const handleInspect = async (orderId: number) => {
     setConfirming(orderId);
     try {
-      await markOrderInspected(orderId, true);
-      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, inspected: true } : o));
+      const order = orders.find((o) => o.id === orderId);
+      if (order) {
+        const result: InspectionResultItem[] = order.items.map((item) => {
+          const r = getItemStatus(item);
+          return { listingId: item.listingId, status: r.status, listedCount: r.listedCount, warehouseCount: r.warehouseCount, totalOrdered: r.totalOrdered, diff: r.diff };
+        });
+        await markOrderInspected(orderId, true, result);
+        setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, inspected: true, inspectionResult: result } : o));
+      } else {
+        await markOrderInspected(orderId, true);
+        setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, inspected: true } : o));
+      }
     } catch (err) { console.error(err); } finally { setConfirming(null); }
   };
 
@@ -259,7 +280,7 @@ export default function InspectionPage() {
     setConfirming(orderId);
     try {
       await markOrderInspected(orderId, false);
-      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, inspected: false } : o));
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, inspected: false, inspectionResult: null } : o));
     } catch (err) { console.error(err); } finally { setConfirming(null); }
   };
 
@@ -409,7 +430,10 @@ export default function InspectionPage() {
                       <thead><tr><th>物品名稱</th><th>類型</th><th>上架數量</th><th>倉儲目前</th><th>已出貨</th><th>訂購數量</th><th>結果</th></tr></thead>
                       <tbody>
                         {order.items.map((item, idx) => {
-                          const r = getItemStatus(item);
+                          // Use stored result for inspected orders, otherwise compute live
+                          const r = (order.inspected && order.inspectionResult && order.inspectionResult[idx])
+                            ? order.inspectionResult[idx]
+                            : getItemStatus(item);
                           return (
                             <tr key={idx} className={`inspection-item-row ${r.status === "error" ? "row-error" : r.status === "warning" ? "row-warn" : ""}`}>
                               <td>{item.itemName}</td>
@@ -425,7 +449,9 @@ export default function InspectionPage() {
                                 {r.status === "warning" && <span className="status-warn">無法驗證</span>}
                                 {r.status === "ok" && (
                                   <span className="status-ok">
-                                    {!listingMap.get(item.listingId) && item.chestX != null ? "已出貨 ✓" : "正確"}
+                                    {order.inspected && order.inspectionResult
+                                      ? "已出貨 ✓"
+                                      : (!listingMap.get(item.listingId) && item.chestX != null ? "已出貨 ✓" : "正確")}
                                   </span>
                                 )}
                               </td>

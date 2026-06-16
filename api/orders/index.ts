@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkListingPermission, getDbClient, getOrdersTable, getMessagesTable } from "../listings/_helpers.js";
+import { verifyJwt, checkListingPermission, getDbClient, getOrdersTable, getMessagesTable, getListingsTable } from "../listings/_helpers.js";
 
 interface OrderItem {
   listingId: number;
@@ -82,6 +82,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       assignedAdminId: row.assigned_admin_id ? String(row.assigned_admin_id) : null,
       minecraftId: row.minecraft_id ? String(row.minecraft_id) : null,
       inspected: Number(row.inspected ?? 0) === 1,
+      inspectionResult: row.inspection_result ? (() => { try { return JSON.parse(String(row.inspection_result)); } catch { return null; } })() : null,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));
@@ -193,11 +194,37 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
 
   // Support updating inspected flag
   if (typeof inspected === "boolean") {
+    const { inspectionResult } = req.body as { inspectionResult?: unknown[] };
     try {
+      const resultJson = inspectionResult ? JSON.stringify(inspectionResult) : null;
       await db.execute({
-        sql: `UPDATE ${table} SET inspected = ?, updated_at = datetime('now') WHERE id = ?`,
-        args: [inspected ? 1 : 0, id],
+        sql: `UPDATE ${table} SET inspected = ?, inspection_result = ?, updated_at = datetime('now') WHERE id = ?`,
+        args: [inspected ? 1 : 0, resultJson, id],
       });
+
+      // When confirming inspection, auto-cancel shipped listings
+      if (inspected) {
+        try {
+          const order = await db.execute({
+            sql: `SELECT items FROM ${table} WHERE id = ?`,
+            args: [id],
+          });
+          if (order.rows.length > 0) {
+            const items: OrderItem[] = (() => { try { return JSON.parse(String(order.rows[0].items)); } catch { return []; } })();
+            const listingsTable = getListingsTable();
+            for (const item of items) {
+              await db.execute({
+                sql: `UPDATE ${listingsTable} SET status = 'cancelled' WHERE id = ? AND status = 'active'`,
+                args: [item.listingId],
+              });
+            }
+          }
+        } catch (cancelErr) {
+          console.error("Failed to cancel listings after inspection:", cancelErr);
+          // Non-fatal: inspection still succeeds
+        }
+      }
+
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error("Orders PATCH inspected error:", err);
