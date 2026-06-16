@@ -93,3 +93,50 @@ export async function checkListingRole(): Promise<RoleInfo> {
     return { hasRole: false, isAdmin: false, isWarehouseStaff: false };
   }
 }
+
+// ── Catalog API ──
+
+export interface CatalogItem {
+  itemId: string;
+  itemName: string;
+  itemComponents: string;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export async function fetchCatalog(): Promise<CatalogItem[]> {
+  return apiFetch<CatalogItem[]>("/api/catalog");
+}
+
+export async function syncCatalog(items: { itemId: string; itemName: string; itemComponents?: string }[]): Promise<void> {
+  await apiFetch("/api/catalog", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+// ── Check-queue API ──
+
+export interface CheckQueueResult {
+  checked: number;
+  activated: number[];
+  skipped: { id: number; reason: string }[];
+}
+
+export async function checkQueue(): Promise<CheckQueueResult> {
+  return apiFetch<CheckQueueResult>("/api/orders/check-queue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// ── Activate single queued order ──
+
+export async function activateOrder(id: number): Promise<void> {
+  await apiFetch(`/api/orders/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "activate" }),
+  });
+}

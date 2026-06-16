@@ -12,6 +12,8 @@ import ShopPage from "./ShopPage";
 import OrdersPage from "./OrdersPage";
 import MyOrdersPage from "./MyOrdersPage";
 import InspectionPage from "./InspectionPage";
+import RoleManagePage from "./RoleManagePage";
+import AuditLogPage from "./AuditLogPage";
 import CartSidebar from "./cart/CartSidebar";
 import CheckoutPage from "./CheckoutPage";
 import "./App.css";
@@ -50,7 +52,7 @@ interface StatGroup {
   statIds: string[]; // unique stat IDs across all instances
 }
 
-type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders" | "checkout" | "inspect";
+type ViewMode = "shop" | "items" | "chests" | "stats" | "orders" | "myorders" | "checkout" | "inspect" | "roles" | "audit";
 
 const STAT_LABELS: Record<string, string> = {
   ATK: "攻擊力",
@@ -91,7 +93,7 @@ function posKey(pos: { x: number; y: number; z: number }): string {
 }
 
 function App() {
-  const { user, login, logout, hasListingRole, isAdmin } = useAuth();
+  const { user, login, logout, hasListingRole, isAdmin, isWarehouseStaff } = useAuth();
   const [data, setData] = useState<WarehouseData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -372,6 +374,37 @@ function App() {
                     >
                       我的訂單
                     </button>
+                    {(isAdmin || isWarehouseStaff) && (
+                      <>
+                        <div className="user-menu-divider" />
+                        <button
+                          className="user-menu-item"
+                          onClick={() => { setView("orders"); setShowUserMenu(false); }}
+                        >
+                          🔧 訂單管理
+                        </button>
+                        <button
+                          className="user-menu-item"
+                          onClick={() => { setView("inspect"); setShowUserMenu(false); }}
+                        >
+                          📋 出貨檢驗
+                        </button>
+                        {isAdmin && (
+                          <button
+                            className="user-menu-item"
+                            onClick={() => { setView("roles"); setShowUserMenu(false); }}
+                          >
+                            👥 身分組管理
+                          </button>
+                        )}
+                        <button
+                          className="user-menu-item"
+                          onClick={() => { setView("audit"); setShowUserMenu(false); }}
+                        >
+                          📝 歷史變更
+                        </button>
+                      </>
+                    )}
                     <button
                       className="user-menu-item user-menu-logout"
                       onClick={() => { setShowUserMenu(false); logout(); }}
@@ -398,8 +431,10 @@ function App() {
       {view === "myorders" && user && <MyOrdersPage />}
       {view === "orders" && hasListingRole && <OrdersPage />}
       {view === "inspect" && hasListingRole && <InspectionPage />}
+      {view === "roles" && isAdmin && <RoleManagePage />}
+      {view === "audit" && hasListingRole && <AuditLogPage />}
 
-      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && view !== "checkout" && view !== "inspect" && (
+      {hasListingRole && view !== "shop" && view !== "orders" && view !== "myorders" && view !== "checkout" && view !== "inspect" && view !== "roles" && view !== "audit" && (
         <>
           <div className="meta">
             <span>箱子數: {data?.chests.length ?? 0}</span>

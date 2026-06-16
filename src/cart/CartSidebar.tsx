@@ -8,7 +8,7 @@ interface CartSidebarProps {
 
 export default function CartSidebar({ onNavigateCheckout }: CartSidebarProps) {
   const { user } = useAuth();
-  const { cartItems, updateQuantity, removeFromCart, totalPrice, cartCount } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, totalPrice, cartCount, hasPreOrder } = useCart();
   const [open, setOpen] = useState(false);
 
   return (
@@ -33,9 +33,15 @@ export default function CartSidebar({ onNavigateCheckout }: CartSidebarProps) {
                 {cartItems.map((ci) => (
                   <div key={ci.listing.id} className="cart-item">
                     <div className="cart-item-info">
-                      <span className="cart-item-name">{ci.listing.itemName}</span>
+                      <span className="cart-item-name">
+                        {ci.listing.itemName}
+                        {ci.isPreOrder && <span className="preorder-tag-sm">預購</span>}
+                      </span>
                       <span className="cart-item-detail">
-                        {ci.quantity} 件 &times; {ci.listing.price.toLocaleString()} $ = {(ci.quantity * ci.listing.price).toLocaleString()} $
+                        {ci.isPreOrder
+                          ? `${ci.quantity} 件 — 待定價`
+                          : `${ci.quantity} 件 \u00d7 ${ci.listing.price.toLocaleString()} $ = ${(ci.quantity * ci.listing.price).toLocaleString()} $`
+                        }
                       </span>
                       <div className="cart-qty-controls">
                         <button className="qty-btn-sm" onClick={() => updateQuantity(ci.listing.id, ci.quantity - 1)} disabled={ci.quantity <= 1}>-</button>
@@ -57,7 +63,12 @@ export default function CartSidebar({ onNavigateCheckout }: CartSidebarProps) {
                   onClick={() => { setOpen(false); onNavigateCheckout(); }}
                   disabled={!user}
                 >
-                  {user ? "前往結帳" : "請先登入"}
+                  {user
+                    ? hasPreOrder
+                      ? "前往結帳（含預購）"
+                      : "前往結帳"
+                    : "請先登入"
+                  }
                 </button>
               </div>
             </>

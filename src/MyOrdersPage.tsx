@@ -10,6 +10,7 @@ const STATUS_LABELS: Record<string, string> = {
   processing: "處理中",
   completed: "已完成",
   cancelled: "已取消",
+  queued: "排隊中",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -17,12 +18,13 @@ const STATUS_COLORS: Record<string, string> = {
   processing: "#55FFFF",
   completed: "#55FF55",
   cancelled: "#FF5555",
+  queued: "#FF8800",
 };
 
 type TabMode = "active" | "history";
 
 function isActive(order: Order): boolean {
-  return order.status === "pending" || order.status === "processing";
+  return order.status === "pending" || order.status === "processing" || order.status === "queued";
 }
 
 export default function MyOrdersPage() {
@@ -163,10 +165,17 @@ export default function MyOrdersPage() {
                                 <span className="order-detail-item-name">{item.itemName}</span>
                                 <span className="order-detail-item-id">{item.itemId}</span>
                                 {isBulk && <span className="checkout-bulk-tag">胚子</span>}
+                                {item.isPreOrder && <span className="preorder-tag">預購</span>}
                               </div>
                               <div className="order-detail-item-price">
-                                <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
-                                <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                                {item.isPreOrder ? (
+                                  <span className="preorder-price">待定價</span>
+                                ) : (
+                                  <>
+                                    <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
+                                    <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                             {!isBulk && item.itemComponents && (

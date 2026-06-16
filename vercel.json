@@ -4,6 +4,8 @@
     { "source": "/api/listings/:id", "destination": "/api/listings" },
     { "source": "/api/orders/:id", "destination": "/api/orders" },
     { "source": "/api/anomalies/:id", "destination": "/api/anomalies" },
+    { "source": "/api/audit", "destination": "/api/roles" },
+    { "source": "/api/catalog", "destination": "/api/listings" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

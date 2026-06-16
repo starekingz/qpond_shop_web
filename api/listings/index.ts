@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkListingPermission, getDbClient, getListingsTable } from "./_helpers.js";
+import { verifyJwt, checkListingPermission, getDbClient, getListingsTable, getCatalogTable, writeAuditLog } from "./_helpers.js";
 
 interface CreateListingBody {
   chestPos: { x: number; y: number; z: number };
@@ -14,6 +14,12 @@ interface CreateListingBody {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Dispatch catalog requests (rewritten from /api/catalog)
+  const pathSegments = (req.url || "").split("?")[0].split("/").filter(Boolean);
+  if (pathSegments.includes("catalog")) {
+    return handleCatalog(req, res);
+  }
+
   // Extract optional :id from path: /api/listings/<id>
   const segments = (req.url || "").split("?")[0].split("/").filter(Boolean);
   const lastSegment = segments[segments.length - 1];
@@ -152,6 +158,15 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       ],
     });
 
+    await writeAuditLog({
+      actorId: user.discordId,
+      actorName: user.username,
+      action: "listing_create",
+      targetType: "listing",
+      targetId: String(result.lastInsertRowid),
+      detail: `${listingType === "bulk" ? "整箱" : "單個"}上架 ${itemName} x${count} @ $${price}`,
+    });
+
     return res.status(201).json({
       id: Number(result.lastInsertRowid),
       sellerId: user.discordId,
@@ -210,9 +225,77 @@ async function handleDelete(req: VercelRequest, res: VercelResponse, id: number)
       args: [id],
     });
 
+    await writeAuditLog({
+      actorId: user.discordId,
+      actorName: user.username,
+      action: "listing_cancel",
+      targetType: "listing",
+      targetId: String(id),
+      detail: `下架商品 #${id}`,
+    });
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("Listings DELETE error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
+}
+
+// ── Catalog API (rewritten from /api/catalog) ──
+
+interface CatalogSyncItem {
+  itemId: string;
+  itemName: string;
+  itemComponents?: string;
+}
+
+async function handleCatalog(req: VercelRequest, res: VercelResponse) {
+  const catalogTable = getCatalogTable();
+  const db = getDbClient();
+
+  if (req.method === "GET") {
+    // Public: return all catalog items
+    try {
+      const result = await db.execute({
+        sql: `SELECT * FROM ${catalogTable} ORDER BY item_name ASC`,
+        args: [],
+      });
+      const rows = result.rows.map((row) => ({
+        itemId: String(row.item_id),
+        itemName: String(row.item_name),
+        itemComponents: String(row.item_components ?? ""),
+        firstSeen: String(row.first_seen),
+        lastSeen: String(row.last_seen),
+      }));
+      return res.status(200).json(rows);
+    } catch (err) {
+      console.error("Catalog GET error:", err);
+      return res.status(500).json({ error: "internal_error" });
+    }
+  }
+
+  if (req.method === "POST") {
+    // Sync: upsert bulk items from warehouse into catalog
+    const body = req.body as { items?: CatalogSyncItem[] };
+    if (!body?.items || !Array.isArray(body.items)) {
+      return res.status(400).json({ error: "missing_items" });
+    }
+
+    try {
+      for (const item of body.items) {
+        if (!item.itemId || !item.itemName) continue;
+        await db.execute({
+          sql: `INSERT INTO ${catalogTable} (item_id, item_name, item_components) VALUES (?, ?, ?)
+                ON CONFLICT(item_id) DO UPDATE SET item_name = excluded.item_name, item_components = excluded.item_components, last_seen = datetime('now')`,
+          args: [item.itemId, item.itemName, item.itemComponents ?? ""],
+        });
+      }
+      return res.status(200).json({ success: true, synced: body.items.length });
+    } catch (err) {
+      console.error("Catalog sync error:", err);
+      return res.status(500).json({ error: "internal_error" });
+    }
+  }
+
+  return res.status(405).json({ error: "method_not_allowed" });
 }

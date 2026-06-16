@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchOrders, updateOrderStatus, type Order } from "./orders";
-import { fetchAllActiveListings, type Listing } from "./listings";
+import { fetchAllActiveListings, type Listing, checkQueue, activateOrder } from "./listings";
 import { deleteMessages } from "./messages";
 import OrderChat from "./OrderChat";
 import MinecraftTooltip from "./MinecraftTooltip";
@@ -11,6 +11,7 @@ const STATUS_LABELS: Record<string, string> = {
   processing: "處理中",
   completed: "已完成",
   cancelled: "已取消",
+  queued: "排隊中",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,6 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
   processing: "#55FFFF",
   completed: "#55FF55",
   cancelled: "#AA0000",
+  queued: "#FF8800",
 };
 
 export default function OrdersPage() {
@@ -28,6 +30,7 @@ export default function OrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [chatOrderId, setChatOrderId] = useState<number | null>(null);
   const [listingMap, setListingMap] = useState<Map<number, Listing>>(new Map());
+  const [checkingQueue, setCheckingQueue] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,9 +105,32 @@ export default function OrdersPage() {
             <option value="">所有訂單</option>
             <option value="pending">待處理</option>
             <option value="processing">處理中</option>
+            <option value="queued">排隊中</option>
             <option value="completed">已完成</option>
             <option value="cancelled">已取消</option>
           </select>
+          <button
+            className="refresh-btn"
+            onClick={async () => {
+              setCheckingQueue(true);
+              try {
+                const result = await checkQueue();
+                if (result.activated.length > 0) {
+                  alert(`已啟動 ${result.activated.length} 個排隊訂單`);
+                } else {
+                  alert(`檢查完成，無可啟動的訂單（共 ${result.checked} 個排隊中）`);
+                }
+                reload();
+              } catch (e: unknown) {
+                alert(e instanceof Error ? e.message : "檢查失敗");
+              } finally {
+                setCheckingQueue(false);
+              }
+            }}
+            disabled={checkingQueue}
+          >
+            {checkingQueue ? "檢查中..." : "檢查排隊訂單"}
+          </button>
           <button className="refresh-btn" onClick={reload}>重新整理</button>
         </div>
       </div>
@@ -116,6 +142,7 @@ export default function OrdersPage() {
           {enrichedOrders.map((order) => {
             const isExpanded = expandedOrder === order.id;
             const canAct = order.status === "pending" || order.status === "processing";
+            const isQueued = order.status === "queued";
             return (
               <div key={order.id} className={`admin-order-card ${isExpanded ? "expanded" : ""}`}>
                 <div
@@ -164,10 +191,17 @@ export default function OrdersPage() {
                                 <span className="order-detail-item-name">{item.itemName}</span>
                                 <span className="order-detail-item-id">{item.itemId}</span>
                                 {isBulk && <span className="checkout-bulk-tag">胚子</span>}
+                                {item.isPreOrder && <span className="preorder-tag">預購</span>}
                               </div>
                               <div className="order-detail-item-price">
-                                <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
-                                <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                                {item.isPreOrder ? (
+                                  <span className="preorder-price">待定價</span>
+                                ) : (
+                                  <>
+                                    <span>{item.count} 件 &times; {item.price.toLocaleString()} $</span>
+                                    <span className="order-detail-subtotal">{(item.count * item.price).toLocaleString()} $</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                             {!isBulk && item.itemComponents && (
@@ -200,6 +234,24 @@ export default function OrdersPage() {
                         )}
                         <button className="order-btn order-btn-cancel" onClick={() => handleStatusChange(order.id, "cancelled")}>
                           取消
+                        </button>
+                      </div>
+                    )}
+                    {isQueued && (
+                      <div className="admin-order-actions">
+                        <button
+                          className="order-btn order-btn-process"
+                          onClick={async () => {
+                            try {
+                              await activateOrder(order.id);
+                              alert(`訂單 #${order.id} 已啟動`);
+                              reload();
+                            } catch (e: unknown) {
+                              alert(e instanceof Error ? e.message : "啟動失敗");
+                            }
+                          }}
+                        >
+                          手動啟動
                         </button>
                       </div>
                     )}

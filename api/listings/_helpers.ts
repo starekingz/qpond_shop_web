@@ -35,6 +35,18 @@ export function getAnomaliesTable(): string {
   return process.env.VITE_TURSO_ANOMALIES_TABLE || "shopmod_anomalies";
 }
 
+export function getRolesTable(): string {
+  return process.env.VITE_TURSO_ROLES_TABLE || "shopmod_roles";
+}
+
+export function getAuditLogTable(): string {
+  return process.env.VITE_TURSO_AUDIT_TABLE || "shopmod_audit_log";
+}
+
+export function getCatalogTable(): string {
+  return process.env.VITE_TURSO_CATALOG_TABLE || "shopmod_item_catalog";
+}
+
 export interface JwtPayload {
   discordId: string;
   username: string;
@@ -64,7 +76,37 @@ export async function checkSuperAdmin(discordId: string): Promise<boolean> {
 }
 
 export async function checkWarehouseStaff(discordId: string): Promise<boolean> {
-  const ids = (process.env.WAREHOUSE_STAFF_IDS || "").split(/[,\s]+/).filter(Boolean);
-  if (ids.length === 0) return false;
-  return ids.includes(discordId);
+  // 1. Check env var (legacy / bootstrap)
+  const envIds = (process.env.WAREHOUSE_STAFF_IDS || "").split(/[,\s]+/).filter(Boolean);
+  if (envIds.includes(discordId)) return true;
+  // 2. Check DB
+  try {
+    const db = getDbClient();
+    const result = await db.execute({
+      sql: `SELECT 1 FROM ${getRolesTable()} WHERE user_id = ? AND role = 'warehouse_staff' LIMIT 1`,
+      args: [discordId],
+    });
+    return (result.rows?.length ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function writeAuditLog(opts: {
+  actorId: string;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  detail?: string;
+}): Promise<void> {
+  try {
+    const db = getDbClient();
+    await db.execute({
+      sql: `INSERT INTO ${getAuditLogTable()} (actor_id, actor_name, action, target_type, target_id, detail) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [opts.actorId, opts.actorName, opts.action, opts.targetType, opts.targetId, opts.detail || ""],
+    });
+  } catch (err) {
+    console.error("Failed to write audit log:", err);
+  }
 }

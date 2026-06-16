@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkSuperAdmin, getDbClient } from "../listings/_helpers.js";
+import { verifyJwt, checkSuperAdmin, getDbClient, writeAuditLog } from "../listings/_helpers.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "DELETE") {
@@ -52,9 +52,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       args: [JSON.stringify(parsed)],
     });
 
+    await writeAuditLog({
+      actorId: user.discordId,
+      actorName: user.username,
+      action: "chest_delete",
+      targetType: "chest",
+      targetId: `(${x}, ${y}, ${z})`,
+      detail: `刪除箱子座標 (${x}, ${y}, ${z})`,
+    });
+
     return res.status(200).json({ success: true, removed: 1 });
   } catch (err) {
     console.error("Warehouse DELETE error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
 }
+

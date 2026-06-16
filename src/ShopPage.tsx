@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
-import { fetchAllActiveListings, type Listing } from "./listings";
+import { fetchAllActiveListings, fetchCatalog, syncCatalog, type Listing, type CatalogItem } from "./listings";
 import { fetchOrders, type Order } from "./orders";
 import { fetchWarehouseData, type WarehouseData } from "./turso";
 import { useCart } from "./cart/CartContext";
@@ -58,6 +58,13 @@ interface ShopStatGroup {
   statIds: string[];
 }
 
+const PREORDER_MAX = 99;
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return -(Math.abs(h) % 1000000 + 1);
+}
+
 export default function ShopPage() {
   const { user } = useAuth();
   const { addToCart, cartItems } = useCart();
@@ -86,6 +93,10 @@ export default function ShopPage() {
   const [selectedEquipTypes, setSelectedEquipTypes] = useState<Set<EquipmentType>>(new Set());
   const [showEquipFilter, setShowEquipFilter] = useState(false);
 
+  // Catalog (pre-order) state
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [preOrderQty, setPreOrderQty] = useState<Record<string, number>>({});
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -93,11 +104,13 @@ export default function ShopPage() {
       fetchOrders("pending").catch(() => [] as Order[]),
       fetchOrders("processing").catch(() => [] as Order[]),
       fetchWarehouseData().catch(() => null),
+      fetchCatalog().catch(() => [] as CatalogItem[]),
     ])
-      .then(([listingsData, pendingOrders, processingOrders, whData]) => {
+      .then(([listingsData, pendingOrders, processingOrders, whData, catalogData]) => {
         if (cancelled) return;
         setListings(listingsData);
         setWarehouseData(whData);
+        setCatalogItems(catalogData);
 
         // Build sold map: listingId → total ordered qty
         const sold = new Map<number, number>();
@@ -113,6 +126,26 @@ export default function ShopPage() {
       .catch(() => { if (!cancelled) { setListings([]); setLoading(false); } });
     return () => { cancelled = true; };
   }, [reloadKey]);
+
+  // Sync warehouse bulk items to catalog
+  useEffect(() => {
+    if (!warehouseData) return;
+    const uniqueItems = new Map<string, { itemId: string; itemName: string; itemComponents: string }>();
+    for (const chest of warehouseData.chests) {
+      for (const item of chest.items) {
+        if (!uniqueItems.has(item.itemId)) {
+          uniqueItems.set(item.itemId, {
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemComponents: item.itemComponents ?? "",
+          });
+        }
+      }
+    }
+    if (uniqueItems.size > 0) {
+      syncCatalog(Array.from(uniqueItems.values())).catch(() => {});
+    }
+  }, [warehouseData]);
 
   // Build warehouse lookups
   const warehouseMap = useMemo(() => {
@@ -184,6 +217,40 @@ export default function ShopPage() {
     for (const ci of cartItems) m.set(ci.listing.id, ci.quantity);
     return m;
   }, [cartItems]);
+
+  // Pre-order: catalog items without active bulk listings
+  const preOrderItems = useMemo(() => {
+    const activeBulkItemIds = new Set(
+      listings.filter((l) => l.listingType === "bulk").map((l) => l.itemId)
+    );
+    const kw = search.trim().toLowerCase();
+    return catalogItems
+      .filter((c) => !activeBulkItemIds.has(c.itemId))
+      .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw));
+  }, [catalogItems, listings, search]);
+
+  const handlePreOrderAdd = (catItem: CatalogItem) => {
+    if (!user) return;
+    const qty = preOrderQty[catItem.itemId] || 1;
+    const syntheticListing: Listing = {
+      id: hashStr(catItem.itemId),
+      sellerId: "",
+      sellerName: "",
+      chestX: 0, chestY: 0, chestZ: 0,
+      slot: -1,
+      itemName: catItem.itemName,
+      itemId: catItem.itemId,
+      itemComponents: catItem.itemComponents,
+      tooltipLines: [],
+      count: PREORDER_MAX,
+      price: 0,
+      listingType: "bulk",
+      status: "pre-order",
+      createdAt: "",
+    };
+    addToCart(syntheticListing, qty, true);
+    setPreOrderQty((p) => ({ ...p, [catItem.itemId]: 1 }));
+  };
 
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase();
@@ -555,7 +622,7 @@ export default function ShopPage() {
             )}
           </div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !(tab === "bulk" && preOrderItems.length > 0) ? (
         <div className="empty">目前沒有上架物品</div>
       ) : (
         /* ── Table view (all / bulk) ── */
@@ -645,6 +712,68 @@ export default function ShopPage() {
                 </Fragment>
                 );
               })}
+              {/* Pre-order items in bulk tab */}
+              {tab === "bulk" && preOrderItems.length > 0 && (
+                <>
+                  <tr className="preorder-section-header">
+                    <td colSpan={7}>
+                      <div className="preorder-divider">
+                        <span className="preorder-divider-tag">預購區</span>
+                        <span className="preorder-divider-hint">以下物品尚未上架，可先預購排隊</span>
+                      </div>
+                    </td>
+                  </tr>
+                  {preOrderItems.map((catItem) => {
+                    const syntheticId = hashStr(catItem.itemId);
+                    const inCart = cartMap.get(syntheticId) || 0;
+                    const qty = preOrderQty[catItem.itemId] || 1;
+                    return (
+                      <tr key={`preorder-${catItem.itemId}`} className="item-row shop-row preorder-row">
+                        <td className="item-icon-cell">
+                          <ItemIcon itemId={catItem.itemId} itemComponents={catItem.itemComponents} />
+                        </td>
+                        <td className="item-name">
+                          {catItem.itemName}
+                          <span className="preorder-tag">預購</span>
+                        </td>
+                        <td className="item-id">{catItem.itemId}</td>
+                        <td className="item-count preorder-qty">—</td>
+                        <td className="shop-price preorder-price">待定價</td>
+                        <td className="shop-seller">—</td>
+                        <td>
+                          {user ? (
+                            <div className="shop-add-group">
+                              <div className="qty-selector">
+                                <button
+                                  className="qty-btn"
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.max(1, qty - 1) }))}
+                                >-</button>
+                                <input
+                                  type="number"
+                                  className="qty-input"
+                                  min={1}
+                                  max={PREORDER_MAX}
+                                  value={qty}
+                                  onChange={(e) => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.min(PREORDER_MAX, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                                />
+                                <button
+                                  className="qty-btn"
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.min(PREORDER_MAX, qty + 1) }))}
+                                >+</button>
+                              </div>
+                              <button className="cart-add-btn preorder-btn" onClick={() => handlePreOrderAdd(catItem)}>
+                                {inCart > 0 ? `已預購 (${inCart})` : "預購"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="shop-login-hint">登入後可預購</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </>
+              )}
             </tbody>
           </table>
         </div>

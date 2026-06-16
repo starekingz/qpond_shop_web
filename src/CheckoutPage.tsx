@@ -13,7 +13,7 @@ interface CheckoutPageProps {
 
 export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPageProps) {
   const { user } = useAuth();
-  const { cartItems, totalPrice, clearCart } = useCart();
+  const { cartItems, totalPrice, clearCart, hasPreOrder } = useCart();
   const [minecraftId, setMinecraftId] = useState("");
   const [onlineAdmins, setOnlineAdmins] = useState<OnlineAdmin[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(true);
@@ -39,11 +39,11 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
     setSubmitting(true);
     try {
       const items = cartItems.map((ci) => ({
-        listingId: ci.listing.id,
+        listingId: ci.isPreOrder ? 0 : ci.listing.id,
         itemName: ci.listing.itemName,
         itemId: ci.listing.itemId,
         count: ci.quantity,
-        price: ci.listing.price,
+        price: ci.isPreOrder ? 0 : ci.listing.price,
         listingType: ci.listing.listingType,
         itemComponents: ci.listing.itemComponents,
         chestX: ci.listing.chestX,
@@ -51,9 +51,13 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
         chestZ: ci.listing.chestZ,
         slot: ci.listing.slot,
         listingCount: ci.listing.count,
+        isPreOrder: ci.isPreOrder || false,
       }));
-      const order = await createOrder(items, minecraftId.trim(), selectedAdmin || undefined);
+      const order = await createOrder(items, minecraftId.trim(), selectedAdmin || undefined, hasPreOrder || undefined);
       clearCart();
+      if (hasPreOrder) {
+        alert("訂單已進入排隊，等待物品上架後自動成立");
+      }
       onOrderCreated(order.id);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "結帳失敗");
@@ -95,13 +99,23 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
                   <div className="checkout-item-name">{ci.listing.itemName}</div>
                   <div className="checkout-item-id">{ci.listing.itemId}</div>
                   {isBulk && <span className="checkout-bulk-tag">胚子</span>}
+                  {ci.isPreOrder && <span className="preorder-tag">預購</span>}
                 </div>
                 <div className="checkout-item-qty">
                   <span>數量: {ci.quantity}</span>
                 </div>
                 <div className="checkout-item-price">
-                  <div className="checkout-unit-price">{ci.listing.price.toLocaleString()} $ / 件</div>
-                  <div className="checkout-subtotal">小計: {(ci.listing.price * ci.quantity).toLocaleString()} $</div>
+                  {ci.isPreOrder ? (
+                    <>
+                      <div className="checkout-unit-price preorder-price">待定價</div>
+                      <div className="checkout-subtotal preorder-price">待上架後定價</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="checkout-unit-price">{ci.listing.price.toLocaleString()} $ / 件</div>
+                      <div className="checkout-subtotal">小計: {(ci.listing.price * ci.quantity).toLocaleString()} $</div>
+                    </>
+                  )}
                 </div>
               </div>
               {!isBulk && (
@@ -195,15 +209,20 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
           <span>{cartItems.reduce((sum, ci) => sum + ci.quantity, 0)} 件</span>
         </div>
         <div className="checkout-summary-row checkout-summary-total">
-          <span>總計</span>
+          <span>總計{hasPreOrder ? "（不含預購）" : ""}</span>
           <span>{totalPrice.toLocaleString()} $</span>
         </div>
+        {hasPreOrder && (
+          <div className="checkout-preorder-hint">
+            預購物品將在物品上架後自動定價並成立訂單
+          </div>
+        )}
         <button
           className="cart-checkout-btn checkout-confirm-btn"
           onClick={handleCheckout}
           disabled={submitting || !minecraftId.trim()}
         >
-          {submitting ? "送出中..." : "確認下單"}
+          {submitting ? "送出中..." : hasPreOrder ? "確認預購" : "確認下單"}
         </button>
       </div>
     </div>
