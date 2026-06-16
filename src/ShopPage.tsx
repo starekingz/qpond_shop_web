@@ -286,11 +286,19 @@ export default function ShopPage() {
       .filter((c) => !inStockNames.has(c.itemName))
       .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw))
       .filter((c) => {
+        // Equipment type filter
+        if (selectedEquipTypes.size > 0) {
+          const eqType = parseEquipmentType(c.itemComponents, c.itemId);
+          return eqType !== null && selectedEquipTypes.has(eqType);
+        }
+        return true;
+      })
+      .filter((c) => {
         if (seenNames.has(c.itemName)) return false;
         seenNames.add(c.itemName);
         return true;
       });
-  }, [catalogItems, listings, search, warehouseData]);
+  }, [catalogItems, listings, search, warehouseData, selectedEquipTypes]);
 
   const handlePreOrderAdd = (catItem: CatalogItem) => {
     if (!user) return;
@@ -686,7 +694,7 @@ export default function ShopPage() {
             )}
           </div>
         </div>
-      ) : filtered.length === 0 && !(tab === "bulk" && preOrderItems.length > 0) ? (
+      ) : filtered.length === 0 && !((tab === "all" || tab === "bulk") && preOrderItems.length > 0) ? (
         <div className="empty">目前沒有上架物品</div>
       ) : (
         /* ── Table view (all / bulk) ── */
@@ -776,8 +784,8 @@ export default function ShopPage() {
                 </Fragment>
                 );
               })}
-              {/* Pre-order items in bulk tab */}
-              {tab === "bulk" && preOrderItems.length > 0 && (
+              {/* Pre-order items in all/bulk tabs */}
+              {(tab === "all" || tab === "bulk") && preOrderItems.length > 0 && (
                 <>
                   <tr className="preorder-section-header">
                     <td colSpan={7}>
