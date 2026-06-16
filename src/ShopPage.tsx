@@ -223,16 +223,16 @@ export default function ShopPage() {
     return m;
   }, [cartItems]);
 
-  // Pre-order: items in warehouse + catalog + OOS bulk listings, excluding in-stock bulk items
+  // Pre-order: group by itemName so same kind of item only shows once
   const preOrderItems = useMemo(() => {
-    // Only exclude items with active in-stock bulk listings (composite key)
-    const inStockKeys = new Set(
+    // Collect in-stock bulk item names to exclude
+    const inStockNames = new Set(
       listings
         .filter((l) => l.listingType === "bulk" && l.count > 0)
-        .map((l) => makeCatalogKey(l.itemId, l.itemComponents ?? ""))
+        .map((l) => l.itemName)
     );
 
-    // Merge 3 sources using composite key
+    // Merge 3 sources using composite key, then deduplicate by itemName
     const allItems = new Map<string, CatalogItem>();
 
     // Source 1: warehouse scan (currently in chests)
@@ -279,21 +279,25 @@ export default function ShopPage() {
       }
     }
 
+    // Filter out in-stock items, then deduplicate by itemName
     const kw = search.trim().toLowerCase();
+    const seenNames = new Set<string>();
     return Array.from(allItems.values())
+      .filter((c) => !inStockNames.has(c.itemName))
+      .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw))
       .filter((c) => {
-        const key = c.catalogKey || makeCatalogKey(c.itemId, c.itemComponents);
-        return !inStockKeys.has(key);
-      })
-      .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw));
+        if (seenNames.has(c.itemName)) return false;
+        seenNames.add(c.itemName);
+        return true;
+      });
   }, [catalogItems, listings, search, warehouseData]);
 
   const handlePreOrderAdd = (catItem: CatalogItem) => {
     if (!user) return;
-    const key = catItem.catalogKey || makeCatalogKey(catItem.itemId, catItem.itemComponents);
-    const qty = preOrderQty[key] || 1;
+    // Use itemName as the cart key for pre-order (one entry per item kind)
+    const qty = preOrderQty[catItem.itemName] || 1;
     const syntheticListing: Listing = {
-      id: hashStr(key),
+      id: hashStr(catItem.itemName),
       sellerId: "",
       sellerName: "",
       chestX: 0, chestY: 0, chestZ: 0,
@@ -309,7 +313,7 @@ export default function ShopPage() {
       createdAt: "",
     };
     addToCart(syntheticListing, qty, true);
-    setPreOrderQty((p) => ({ ...p, [key]: 1 }));
+    setPreOrderQty((p) => ({ ...p, [catItem.itemName]: 1 }));
   };
 
   const filtered = useMemo(() => {
@@ -784,12 +788,11 @@ export default function ShopPage() {
                     </td>
                   </tr>
                   {preOrderItems.map((catItem) => {
-                    const catKey = catItem.catalogKey || makeCatalogKey(catItem.itemId, catItem.itemComponents);
-                    const syntheticId = hashStr(catKey);
+                    const syntheticId = hashStr(catItem.itemName);
                     const inCart = cartMap.get(syntheticId) || 0;
-                    const qty = preOrderQty[catKey] || 1;
+                    const qty = preOrderQty[catItem.itemName] || 1;
                     return (
-                      <tr key={`preorder-${catKey}`} className="item-row shop-row preorder-row">
+                      <tr key={`preorder-${catItem.itemName}`} className="item-row shop-row preorder-row">
                         <td className="item-icon-cell">
                           <ItemIcon itemId={catItem.itemId} itemComponents={catItem.itemComponents} />
                         </td>
@@ -807,7 +810,7 @@ export default function ShopPage() {
                               <div className="qty-selector">
                                 <button
                                   className="qty-btn"
-                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catKey]: Math.max(1, qty - 1) }))}
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemName]: Math.max(1, qty - 1) }))}
                                 >-</button>
                                 <input
                                   type="number"
@@ -815,11 +818,11 @@ export default function ShopPage() {
                                   min={1}
                                   max={PREORDER_MAX}
                                   value={qty}
-                                  onChange={(e) => setPreOrderQty((p) => ({ ...p, [catKey]: Math.min(PREORDER_MAX, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                                  onChange={(e) => setPreOrderQty((p) => ({ ...p, [catItem.itemName]: Math.min(PREORDER_MAX, Math.max(1, parseInt(e.target.value) || 1)) }))}
                                 />
                                 <button
                                   className="qty-btn"
-                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catKey]: Math.min(PREORDER_MAX, qty + 1) }))}
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemName]: Math.min(PREORDER_MAX, qty + 1) }))}
                                 >+</button>
                               </div>
                               <button className="cart-add-btn preorder-btn" onClick={() => handlePreOrderAdd(catItem)}>
