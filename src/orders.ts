@@ -6,6 +6,11 @@ export interface OrderItem {
   price: number;
   listingType?: "single" | "bulk";
   itemComponents?: string;
+  // Listing snapshot (captured at order creation for inspection)
+  chestX?: number;
+  chestY?: number;
+  chestZ?: number;
+  slot?: number;
   listingCount?: number;
 }
 

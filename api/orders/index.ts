@@ -9,6 +9,11 @@ interface OrderItem {
   price: number;
   listingType?: "single" | "bulk";
   itemComponents?: string;
+  chestX?: number;
+  chestY?: number;
+  chestZ?: number;
+  slot?: number;
+  listingCount?: number;
 }
 
 interface CreateOrderBody {

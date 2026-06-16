@@ -73,7 +73,11 @@ export default function InspectionPage() {
     let cancelled = false;
     Promise.all([
       fetchOrders("completed").catch(() => [] as Order[]),
-      fetchOrders().catch(() => [] as Order[]),
+      Promise.all([
+        fetchOrders("pending").catch(() => [] as Order[]),
+        fetchOrders("processing").catch(() => [] as Order[]),
+        fetchOrders("completed").catch(() => [] as Order[]),
+      ]).then(([p, pr, c]) => [...p, ...pr, ...c]),
       fetchAllActiveListings().catch(() => [] as Listing[]),
       fetchWarehouseData().catch(() => null),
       fetchAnomalies().catch(() => [] as Anomaly[]),
@@ -150,6 +154,21 @@ export default function InspectionPage() {
     return 0;
   };
 
+  // Get warehouse quantity using snapshot data (when listing no longer exists)
+  const getWarehouseQtyBySnapshot = (chestX: number, chestY: number, chestZ: number, slot: number, itemId: string): number | null => {
+    if (!warehouseData) return null;
+    const exactKey = `${chestX},${chestY},${chestZ},${slot},${itemId}`;
+    const exactQty = warehouseMap.get(exactKey);
+    if (exactQty !== undefined && exactQty > 0) return exactQty;
+    const chestKey = `${chestX},${chestY},${chestZ},${itemId}`;
+    const chestQty = warehouseChestItem.get(chestKey);
+    if (chestQty !== undefined && chestQty > 0) return chestQty;
+    const fbKey = `${slot},${itemId}`;
+    const fbQty = warehouseFallback.get(fbKey);
+    if (fbQty !== undefined && fbQty > 0) return fbQty;
+    return 0;
+  };
+
   // ── Order inspection logic ──
   const totalOrderedPerListing = useMemo(() => {
     const m = new Map<number, number>();
@@ -170,35 +189,40 @@ export default function InspectionPage() {
   const getItemStatus = (item: OrderItem) => {
     const listing = listingMap.get(item.listingId);
     const totalOrdered = totalOrderedPerListing.get(item.listingId) || 0;
-    // Use stored listingCount snapshot (from order time) for accurate calculation
-    const originalCount = item.listingCount ?? listing?.count ?? item.count;
+    const listingCount = listing ? listing.count : (item.listingCount ?? null);
 
-    if (!listing) {
-      // Listing no longer exists — item was taken out of warehouse (shipped)
-      // The entire listing count was removed, so decrease = originalCount
-      const decrease = originalCount;
+    // Case 1: listing still exists → compare warehouse vs listing
+    if (listing) {
+      const whQty = getWarehouseQty(listing);
+      if (whQty === null) return { status: "warning" as const, listedCount: listing.count, warehouseCount: null, totalOrdered, diff: null };
+      const decrease = listing.count - whQty;
       const diff = decrease - totalOrdered;
-      if (diff === 0) {
-        return { status: "ok" as const, listedCount: originalCount, warehouseCount: 0, totalOrdered, diff };
+      if (diff === 0) return { status: "ok" as const, listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
+      return { status: "error" as const, listedCount: listing.count, warehouseCount: whQty, totalOrdered, diff };
+    }
+
+    // Case 2: listing gone but order has snapshot → verify with warehouse snapshot
+    if (item.chestX != null && item.chestY != null && item.chestZ != null) {
+      const whQty = getWarehouseQtyBySnapshot(item.chestX, item.chestY, item.chestZ, item.slot ?? 0, item.itemId);
+      if (whQty === null) return { status: "warning" as const, listedCount: listingCount, warehouseCount: null, totalOrdered, diff: null };
+
+      if (item.listingType === "single") {
+        // Single item: if gone from warehouse → correctly shipped
+        if (whQty === 0) return { status: "ok" as const, listedCount: listingCount, warehouseCount: 0, totalOrdered, diff: 0 };
+        // Item still in warehouse → not shipped
+        return { status: "error" as const, listedCount: listingCount, warehouseCount: whQty, totalOrdered, diff: -(whQty) };
       }
-      // For bulk: listing gone but not all were ordered → show discrepancy
-      return { status: "error" as const, listedCount: originalCount, warehouseCount: 0, totalOrdered, diff };
+
+      // Bulk: same logic as before using snapshot count
+      const snapshotCount = item.listingCount ?? 0;
+      const decrease = snapshotCount - whQty;
+      const diff = decrease - totalOrdered;
+      if (diff === 0) return { status: "ok" as const, listedCount: snapshotCount, warehouseCount: whQty, totalOrdered, diff };
+      return { status: "error" as const, listedCount: snapshotCount, warehouseCount: whQty, totalOrdered, diff };
     }
 
-    const whQty = getWarehouseQty(listing);
-    if (whQty === null) {
-      return { status: "warning" as const, listedCount: originalCount, warehouseCount: null, totalOrdered, diff: null };
-    }
-
-    // Use the larger of original snapshot vs current listing.count as baseline
-    // (listing count may have been updated since the order was placed)
-    const baseline = Math.max(originalCount, listing.count);
-    const decrease = baseline - whQty;
-    const diff = decrease - totalOrdered;
-    if (diff === 0) {
-      return { status: "ok" as const, listedCount: baseline, warehouseCount: whQty, totalOrdered, diff };
-    }
-    return { status: "error" as const, listedCount: baseline, warehouseCount: whQty, totalOrdered, diff };
+    // Case 3: no listing, no snapshot → cannot verify
+    return { status: "warning" as const, listedCount: null, warehouseCount: null, totalOrdered, diff: null };
   };
 
   const getOrderStatus = (order: Order): "ok" | "error" | "warning" => {
@@ -389,7 +413,11 @@ export default function InspectionPage() {
                                   <span className="status-error">{r.diff > 0 ? `多扣 ${r.diff}` : `少扣 ${Math.abs(r.diff)}`}</span>
                                 )}
                                 {r.status === "warning" && <span className="status-warn">無法驗證</span>}
-                                {r.status === "ok" && <span className="status-ok">正確</span>}
+                                {r.status === "ok" && (
+                                  <span className="status-ok">
+                                    {!listingMap.get(item.listingId) && item.chestX != null ? "已出貨 ✓" : "正確"}
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );

@@ -46,6 +46,10 @@ export default function CheckoutPage({ onBack, onOrderCreated }: CheckoutPagePro
         price: ci.listing.price,
         listingType: ci.listing.listingType,
         itemComponents: ci.listing.itemComponents,
+        chestX: ci.listing.chestX,
+        chestY: ci.listing.chestY,
+        chestZ: ci.listing.chestZ,
+        slot: ci.listing.slot,
         listingCount: ci.listing.count,
       }));
       const order = await createOrder(items, minecraftId.trim(), selectedAdmin || undefined);
