@@ -220,8 +220,11 @@ export default function ShopPage() {
 
   // Pre-order: items in warehouse but not listed + items in catalog (once existed) but no active bulk listing
   const preOrderItems = useMemo(() => {
+    // Only exclude items with active in-stock bulk listings; OOS bulk items should still be pre-orderable
     const activeBulkItemIds = new Set(
-      listings.filter((l) => l.listingType === "bulk").map((l) => l.itemId)
+      listings
+        .filter((l) => l.listingType === "bulk" && l.count > 0)
+        .map((l) => l.itemId)
     );
 
     // Merge warehouse items + catalog items into a single map
