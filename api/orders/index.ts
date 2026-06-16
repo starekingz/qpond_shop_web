@@ -201,30 +201,6 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
         sql: `UPDATE ${table} SET inspected = ?, inspection_result = ?, updated_at = datetime('now') WHERE id = ?`,
         args: [inspected ? 1 : 0, resultJson, id],
       });
-
-      // When confirming inspection, auto-cancel shipped listings
-      if (inspected) {
-        try {
-          const order = await db.execute({
-            sql: `SELECT items FROM ${table} WHERE id = ?`,
-            args: [id],
-          });
-          if (order.rows.length > 0) {
-            const items: OrderItem[] = (() => { try { return JSON.parse(String(order.rows[0].items)); } catch { return []; } })();
-            const listingsTable = getListingsTable();
-            for (const item of items) {
-              await db.execute({
-                sql: `UPDATE ${listingsTable} SET status = 'cancelled' WHERE id = ? AND status = 'active'`,
-                args: [item.listingId],
-              });
-            }
-          }
-        } catch (cancelErr) {
-          console.error("Failed to cancel listings after inspection:", cancelErr);
-          // Non-fatal: inspection still succeeds
-        }
-      }
-
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error("Orders PATCH inspected error:", err);
@@ -239,7 +215,7 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
 
   try {
     const existing = await db.execute({
-      sql: `SELECT id FROM ${table} WHERE id = ?`,
+      sql: `SELECT id, items FROM ${table} WHERE id = ?`,
       args: [id],
     });
     if (existing.rows.length === 0) {
@@ -250,6 +226,23 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
       sql: `UPDATE ${table} SET status = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [status, id],
     });
+
+    // Auto-cancel listings when order is marked as completed
+    if (status === "completed") {
+      try {
+        const items: OrderItem[] = (() => { try { return JSON.parse(String(existing.rows[0].items)); } catch { return []; } })();
+        const listingsTable = getListingsTable();
+        for (const item of items) {
+          await db.execute({
+            sql: `UPDATE ${listingsTable} SET status = 'cancelled' WHERE id = ? AND status = 'active'`,
+            args: [item.listingId],
+          });
+        }
+      } catch (cancelErr) {
+        console.error("Failed to cancel listings on order completion:", cancelErr);
+        // Non-fatal: status update still succeeds
+      }
+    }
 
     return res.status(200).json({ success: true });
   } catch (err) {
