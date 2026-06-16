@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkListingPermission, getDbClient, getListingsTable, getCatalogTable, writeAuditLog } from "./_helpers.js";
+import { verifyJwt, checkListingPermission, getDbClient, getListingsTable, getCatalogTable, writeAuditLog, makeCatalogKey } from "./_helpers.js";
 
 interface CreateListingBody {
   chestPos: { x: number; y: number; z: number };
@@ -261,6 +261,7 @@ async function handleCatalog(req: VercelRequest, res: VercelResponse) {
         args: [],
       });
       const rows = result.rows.map((row) => ({
+        catalogKey: String(row.catalog_key),
         itemId: String(row.item_id),
         itemName: String(row.item_name),
         itemComponents: String(row.item_components ?? ""),
@@ -284,10 +285,11 @@ async function handleCatalog(req: VercelRequest, res: VercelResponse) {
     try {
       for (const item of body.items) {
         if (!item.itemId || !item.itemName) continue;
+        const catalogKey = makeCatalogKey(item.itemId, item.itemComponents ?? "");
         await db.execute({
-          sql: `INSERT INTO ${catalogTable} (item_id, item_name, item_components) VALUES (?, ?, ?)
-                ON CONFLICT(item_id) DO UPDATE SET item_name = excluded.item_name, item_components = excluded.item_components, last_seen = datetime('now')`,
-          args: [item.itemId, item.itemName, item.itemComponents ?? ""],
+          sql: `INSERT INTO ${catalogTable} (catalog_key, item_id, item_name, item_components) VALUES (?, ?, ?, ?)
+                ON CONFLICT(catalog_key) DO UPDATE SET item_name = excluded.item_name, item_components = excluded.item_components, last_seen = datetime('now')`,
+          args: [catalogKey, item.itemId, item.itemName, item.itemComponents ?? ""],
         });
       }
       return res.status(200).json({ success: true, synced: body.items.length });

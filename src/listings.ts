@@ -97,6 +97,7 @@ export async function checkListingRole(): Promise<RoleInfo> {
 // ── Catalog API ──
 
 export interface CatalogItem {
+  catalogKey: string;
   itemId: string;
   itemName: string;
   itemComponents: string;

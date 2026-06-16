@@ -1,6 +1,7 @@
 import type { VercelRequest } from "@vercel/node";
 import { createClient } from "@libsql/client/web";
 import { jwtVerify } from "jose";
+import { createHash } from "crypto";
 
 type Client = ReturnType<typeof createClient>;
 
@@ -45,6 +46,11 @@ export function getAuditLogTable(): string {
 
 export function getCatalogTable(): string {
   return process.env.VITE_TURSO_CATALOG_TABLE || "shopmod_item_catalog";
+}
+
+export function makeCatalogKey(itemId: string, itemComponents: string): string {
+  const raw = itemId + "|" + (itemComponents || "");
+  return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }
 
 export interface JwtPayload {

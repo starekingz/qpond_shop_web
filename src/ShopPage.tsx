@@ -64,6 +64,10 @@ function hashStr(s: string): number {
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
   return -(Math.abs(h) % 1000000 + 1);
 }
+/** Build a composite key from itemId + itemComponents for unique identification */
+function makeCatalogKey(itemId: string, itemComponents: string): string {
+  return itemId + "|" + (itemComponents || "");
+}
 
 export default function ShopPage() {
   const { user } = useAuth();
@@ -133,8 +137,9 @@ export default function ShopPage() {
     const uniqueItems = new Map<string, { itemId: string; itemName: string; itemComponents: string }>();
     for (const chest of warehouseData.chests) {
       for (const item of chest.items) {
-        if (!uniqueItems.has(item.itemId)) {
-          uniqueItems.set(item.itemId, {
+        const key = makeCatalogKey(item.itemId, item.itemComponents ?? "");
+        if (!uniqueItems.has(key)) {
+          uniqueItems.set(key, {
             itemId: item.itemId,
             itemName: item.itemName,
             itemComponents: item.itemComponents ?? "",
@@ -218,22 +223,26 @@ export default function ShopPage() {
     return m;
   }, [cartItems]);
 
-  // Pre-order: items in warehouse but not listed + items in catalog (once existed) but no active bulk listing
+  // Pre-order: items in warehouse + catalog + OOS bulk listings, excluding in-stock bulk items
   const preOrderItems = useMemo(() => {
-    // Only exclude items with active in-stock bulk listings; OOS bulk items should still be pre-orderable
-    const activeBulkItemIds = new Set(
+    // Only exclude items with active in-stock bulk listings (composite key)
+    const inStockKeys = new Set(
       listings
         .filter((l) => l.listingType === "bulk" && l.count > 0)
-        .map((l) => l.itemId)
+        .map((l) => makeCatalogKey(l.itemId, l.itemComponents ?? ""))
     );
 
-    // Merge warehouse items + catalog items into a single map
+    // Merge 3 sources using composite key
     const allItems = new Map<string, CatalogItem>();
+
+    // Source 1: warehouse scan (currently in chests)
     if (warehouseData) {
       for (const chest of warehouseData.chests) {
         for (const item of chest.items) {
-          if (!allItems.has(item.itemId)) {
-            allItems.set(item.itemId, {
+          const key = makeCatalogKey(item.itemId, item.itemComponents ?? "");
+          if (!allItems.has(key)) {
+            allItems.set(key, {
+              catalogKey: key,
               itemId: item.itemId,
               itemName: item.itemName,
               itemComponents: item.itemComponents ?? "",
@@ -244,23 +253,47 @@ export default function ShopPage() {
         }
       }
     }
+
+    // Source 2: catalog (historically seen items)
     for (const c of catalogItems) {
-      if (!allItems.has(c.itemId)) {
-        allItems.set(c.itemId, c);
+      const key = c.catalogKey || makeCatalogKey(c.itemId, c.itemComponents);
+      if (!allItems.has(key)) {
+        allItems.set(key, c);
+      }
+    }
+
+    // Source 3: OOS bulk listings (have listing but count=0)
+    for (const l of listings) {
+      if (l.listingType === "bulk" && l.count <= 0) {
+        const key = makeCatalogKey(l.itemId, l.itemComponents ?? "");
+        if (!allItems.has(key)) {
+          allItems.set(key, {
+            catalogKey: key,
+            itemId: l.itemId,
+            itemName: l.itemName,
+            itemComponents: l.itemComponents ?? "",
+            firstSeen: "",
+            lastSeen: "",
+          });
+        }
       }
     }
 
     const kw = search.trim().toLowerCase();
     return Array.from(allItems.values())
-      .filter((c) => !activeBulkItemIds.has(c.itemId))
+      .filter((c) => {
+        const key = c.catalogKey || makeCatalogKey(c.itemId, c.itemComponents);
+        return !inStockKeys.has(key);
+      })
       .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw));
   }, [catalogItems, listings, search, warehouseData]);
 
   const handlePreOrderAdd = (catItem: CatalogItem) => {
     if (!user) return;
-    const qty = preOrderQty[catItem.itemId] || 1;
+    const key = catItem.catalogKey || makeCatalogKey(catItem.itemId, catItem.itemComponents);
+    const qty = preOrderQty[key] || 1;
     const syntheticListing: Listing = {
-      id: hashStr(catItem.itemId),
+      id: hashStr(key),
       sellerId: "",
       sellerName: "",
       chestX: 0, chestY: 0, chestZ: 0,
@@ -276,7 +309,7 @@ export default function ShopPage() {
       createdAt: "",
     };
     addToCart(syntheticListing, qty, true);
-    setPreOrderQty((p) => ({ ...p, [catItem.itemId]: 1 }));
+    setPreOrderQty((p) => ({ ...p, [key]: 1 }));
   };
 
   const filtered = useMemo(() => {
@@ -751,11 +784,12 @@ export default function ShopPage() {
                     </td>
                   </tr>
                   {preOrderItems.map((catItem) => {
-                    const syntheticId = hashStr(catItem.itemId);
+                    const catKey = catItem.catalogKey || makeCatalogKey(catItem.itemId, catItem.itemComponents);
+                    const syntheticId = hashStr(catKey);
                     const inCart = cartMap.get(syntheticId) || 0;
-                    const qty = preOrderQty[catItem.itemId] || 1;
+                    const qty = preOrderQty[catKey] || 1;
                     return (
-                      <tr key={`preorder-${catItem.itemId}`} className="item-row shop-row preorder-row">
+                      <tr key={`preorder-${catKey}`} className="item-row shop-row preorder-row">
                         <td className="item-icon-cell">
                           <ItemIcon itemId={catItem.itemId} itemComponents={catItem.itemComponents} />
                         </td>
@@ -773,7 +807,7 @@ export default function ShopPage() {
                               <div className="qty-selector">
                                 <button
                                   className="qty-btn"
-                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.max(1, qty - 1) }))}
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catKey]: Math.max(1, qty - 1) }))}
                                 >-</button>
                                 <input
                                   type="number"
@@ -781,11 +815,11 @@ export default function ShopPage() {
                                   min={1}
                                   max={PREORDER_MAX}
                                   value={qty}
-                                  onChange={(e) => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.min(PREORDER_MAX, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                                  onChange={(e) => setPreOrderQty((p) => ({ ...p, [catKey]: Math.min(PREORDER_MAX, Math.max(1, parseInt(e.target.value) || 1)) }))}
                                 />
                                 <button
                                   className="qty-btn"
-                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catItem.itemId]: Math.min(PREORDER_MAX, qty + 1) }))}
+                                  onClick={() => setPreOrderQty((p) => ({ ...p, [catKey]: Math.min(PREORDER_MAX, qty + 1) }))}
                                 >+</button>
                               </div>
                               <button className="cart-add-btn preorder-btn" onClick={() => handlePreOrderAdd(catItem)}>
