@@ -218,16 +218,40 @@ export default function ShopPage() {
     return m;
   }, [cartItems]);
 
-  // Pre-order: catalog items without active bulk listings
+  // Pre-order: items in warehouse but not listed + items in catalog (once existed) but no active bulk listing
   const preOrderItems = useMemo(() => {
     const activeBulkItemIds = new Set(
       listings.filter((l) => l.listingType === "bulk").map((l) => l.itemId)
     );
+
+    // Merge warehouse items + catalog items into a single map
+    const allItems = new Map<string, CatalogItem>();
+    if (warehouseData) {
+      for (const chest of warehouseData.chests) {
+        for (const item of chest.items) {
+          if (!allItems.has(item.itemId)) {
+            allItems.set(item.itemId, {
+              itemId: item.itemId,
+              itemName: item.itemName,
+              itemComponents: item.itemComponents ?? "",
+              firstSeen: "",
+              lastSeen: "",
+            });
+          }
+        }
+      }
+    }
+    for (const c of catalogItems) {
+      if (!allItems.has(c.itemId)) {
+        allItems.set(c.itemId, c);
+      }
+    }
+
     const kw = search.trim().toLowerCase();
-    return catalogItems
+    return Array.from(allItems.values())
       .filter((c) => !activeBulkItemIds.has(c.itemId))
       .filter((c) => !kw || c.itemName.toLowerCase().includes(kw) || c.itemId.toLowerCase().includes(kw));
-  }, [catalogItems, listings, search]);
+  }, [catalogItems, listings, search, warehouseData]);
 
   const handlePreOrderAdd = (catItem: CatalogItem) => {
     if (!user) return;
