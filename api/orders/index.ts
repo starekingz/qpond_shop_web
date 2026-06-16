@@ -238,8 +238,8 @@ async function handlePatch(req: VercelRequest, res: VercelResponse, id: number) 
       for (const item of items) {
         if (item.isPreOrder) {
           const matchResult = await db.execute({
-            sql: `SELECT * FROM ${listingsTable} WHERE item_id = ? AND listing_type = 'bulk' AND status = 'active' ORDER BY created_at ASC LIMIT 1`,
-            args: [item.itemId],
+            sql: `SELECT * FROM ${listingsTable} WHERE item_name = ? AND listing_type = 'bulk' AND status = 'active' ORDER BY created_at ASC LIMIT 1`,
+            args: [item.itemName],
           });
           if (matchResult.rows.length === 0) {
             return res.status(409).json({ error: "not_ready", message: `Item ${item.itemName} has no active listing yet` });
@@ -392,8 +392,8 @@ async function handleCheckQueue(req: VercelRequest, res: VercelResponse) {
       for (const item of items) {
         if (item.isPreOrder) {
           const matchResult = await db.execute({
-            sql: `SELECT * FROM ${listingsTable} WHERE item_id = ? AND listing_type = 'bulk' AND status = 'active' ORDER BY created_at ASC LIMIT 1`,
-            args: [item.itemId],
+            sql: `SELECT * FROM ${listingsTable} WHERE item_name = ? AND listing_type = 'bulk' AND status = 'active' ORDER BY created_at ASC LIMIT 1`,
+            args: [item.itemName],
           });
           if (matchResult.rows.length === 0) {
             canActivate = false;
