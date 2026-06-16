@@ -142,9 +142,14 @@ export default function InspectionPage() {
 
   const getWarehouseQty = (listing: Listing): number | null => {
     if (!warehouseData) return null;
+    const isSingle = listing.slot !== -1;
+    // Tier 1: exact match
     const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
     const exactQty = warehouseMap.get(exactKey);
     if (exactQty !== undefined && exactQty > 0) return exactQty;
+    // Single items: only exact position matters — item gone from slot = gone
+    if (isSingle) return 0;
+    // Bulk items: fall through to chest-level aggregation
     const chestKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.itemId}`;
     const chestQty = warehouseChestItem.get(chestKey);
     if (chestQty !== undefined && chestQty > 0) return chestQty;
@@ -155,11 +160,16 @@ export default function InspectionPage() {
   };
 
   // Get warehouse quantity using snapshot data (when listing no longer exists)
-  const getWarehouseQtyBySnapshot = (chestX: number, chestY: number, chestZ: number, slot: number, itemId: string): number | null => {
+  const getWarehouseQtyBySnapshot = (chestX: number, chestY: number, chestZ: number, slot: number, itemId: string, listingType?: string): number | null => {
     if (!warehouseData) return null;
+    const isSingle = listingType === "single" || (slot !== -1 && listingType !== "bulk");
+    // Tier 1: exact match
     const exactKey = `${chestX},${chestY},${chestZ},${slot},${itemId}`;
     const exactQty = warehouseMap.get(exactKey);
     if (exactQty !== undefined && exactQty > 0) return exactQty;
+    // Single items: only exact position matters
+    if (isSingle) return 0;
+    // Bulk: fall through to chest-level aggregation
     const chestKey = `${chestX},${chestY},${chestZ},${itemId}`;
     const chestQty = warehouseChestItem.get(chestKey);
     if (chestQty !== undefined && chestQty > 0) return chestQty;
@@ -203,7 +213,7 @@ export default function InspectionPage() {
 
     // Case 2: listing gone but order has snapshot → verify with warehouse snapshot
     if (item.chestX != null && item.chestY != null && item.chestZ != null) {
-      const whQty = getWarehouseQtyBySnapshot(item.chestX, item.chestY, item.chestZ, item.slot ?? 0, item.itemId);
+      const whQty = getWarehouseQtyBySnapshot(item.chestX, item.chestY, item.chestZ, item.slot ?? 0, item.itemId, item.listingType);
       if (whQty === null) return { status: "warning" as const, listedCount: listingCount, warehouseCount: null, totalOrdered, diff: null };
 
       if (item.listingType === "single") {

@@ -159,10 +159,14 @@ export default function ShopPage() {
   // Get live warehouse quantity for a listing
   const getLiveQty = (listing: Listing): number => {
     if (!warehouseData) return listing.count;
+    const isSingle = listing.slot !== -1;
     // Tier 1: exact match "x,y,z,slot,itemId"
     const exactKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.slot},${listing.itemId}`;
     const exactQty = warehouseMap.get(exactKey);
     if (exactQty !== undefined && exactQty > 0) return exactQty;
+    // Single items: only exact position matters — item gone from slot = gone
+    if (isSingle) return listing.count;
+    // Bulk items (slot === -1): fall through to chest-level aggregation
     // Tier 2: same chest + same itemId (items may have moved between slots)
     const chestKey = `${listing.chestX},${listing.chestY},${listing.chestZ},${listing.itemId}`;
     const chestQty = warehouseChestItem.get(chestKey);
