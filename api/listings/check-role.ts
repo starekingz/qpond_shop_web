@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyJwt, checkListingPermission } from "./_helpers.js";
+import { verifyJwt, checkListingPermission, checkSuperAdmin, checkWarehouseStaff } from "./_helpers.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
@@ -11,6 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "not_authenticated" });
   }
 
-  const hasRole = await checkListingPermission(user.discordId);
-  return res.status(200).json({ hasRole });
+  const [hasRole, isAdmin, isWarehouseStaff] = await Promise.all([
+    checkListingPermission(user.discordId),
+    checkSuperAdmin(user.discordId),
+    checkWarehouseStaff(user.discordId),
+  ]);
+  return res.status(200).json({ hasRole, isAdmin, isWarehouseStaff });
 }

@@ -12,6 +12,8 @@ interface AuthState {
   user: DiscordUser | null;
   loading: boolean;
   hasListingRole: boolean;
+  isAdmin: boolean;
+  isWarehouseStaff: boolean;
 }
 
 interface AuthContextValue extends AuthState {
@@ -22,7 +24,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null, loading: true, hasListingRole: false });
+  const [state, setState] = useState<AuthState>({ user: null, loading: true, hasListingRole: false, isAdmin: false, isWarehouseStaff: false });
 
   useEffect(() => {
     let cancelled = false;
@@ -31,16 +33,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/discord/me", { credentials: "include" });
         if (!cancelled && res.ok) {
           const data = (await res.json()) as { user: DiscordUser };
-          let hasRole = false;
+          let hasRole = false, isAdmin = false, isWarehouseStaff = false;
           try {
-            hasRole = await checkListingRole();
+            const roleInfo = await checkListingRole();
+            hasRole = roleInfo.hasRole;
+            isAdmin = roleInfo.isAdmin;
+            isWarehouseStaff = roleInfo.isWarehouseStaff;
           } catch { /* ignore */ }
-          if (!cancelled) setState({ user: data.user, loading: false, hasListingRole: hasRole });
+          if (!cancelled) setState({ user: data.user, loading: false, hasListingRole: hasRole, isAdmin, isWarehouseStaff });
         } else if (!cancelled) {
-          setState({ user: null, loading: false, hasListingRole: false });
+          setState({ user: null, loading: false, hasListingRole: false, isAdmin: false, isWarehouseStaff: false });
         }
       } catch {
-        if (!cancelled) setState({ user: null, loading: false, hasListingRole: false });
+        if (!cancelled) setState({ user: null, loading: false, hasListingRole: false, isAdmin: false, isWarehouseStaff: false });
       }
     })();
     return () => { cancelled = true; };
@@ -54,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await fetch("/api/discord/logout", { method: "POST", credentials: "include" });
     } finally {
-      setState({ user: null, loading: false, hasListingRole: false });
+      setState({ user: null, loading: false, hasListingRole: false, isAdmin: false, isWarehouseStaff: false });
     }
   }, []);
 

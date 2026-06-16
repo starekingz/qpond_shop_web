@@ -91,7 +91,7 @@ function posKey(pos: { x: number; y: number; z: number }): string {
 }
 
 function App() {
-  const { user, login, logout, hasListingRole } = useAuth();
+  const { user, login, logout, hasListingRole, isAdmin } = useAuth();
   const [data, setData] = useState<WarehouseData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -558,6 +558,29 @@ function App() {
                 <span>{chest.items.reduce((s, i) => s + i.count, 0)} 件</span>
                 <span className="chest-time">{new Date(chest.capturedAt).toLocaleString("zh-TW")}</span>
               </div>
+              {isAdmin && (
+                <button
+                  className="chest-delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!window.confirm(`確定要刪除箱子 ${posKey(chest.pos)} 嗎？`)) return;
+                    fetch("/api/warehouse/delete-chest", {
+                      method: "DELETE",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ x: chest.pos.x, y: chest.pos.y, z: chest.pos.z }),
+                    })
+                      .then((r) => { if (!r.ok) throw new Error("刪除失敗"); return r.json(); })
+                      .then(() => {
+                        setData((prev) => prev ? { ...prev, chests: prev.chests.filter((c) => !(c.pos.x === chest.pos.x && c.pos.y === chest.pos.y && c.pos.z === chest.pos.z)) } : prev);
+                      })
+                      .catch((e) => alert(e instanceof Error ? e.message : "刪除失敗"));
+                  }}
+                  title="刪除箱子"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>

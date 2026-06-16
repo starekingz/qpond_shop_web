@@ -79,11 +79,17 @@ export async function cancelListing(id: number): Promise<void> {
   await apiFetch(`/api/listings/${id}`, { method: "DELETE" });
 }
 
-export async function checkListingRole(): Promise<boolean> {
+export interface RoleInfo {
+  hasRole: boolean;
+  isAdmin: boolean;
+  isWarehouseStaff: boolean;
+}
+
+export async function checkListingRole(): Promise<RoleInfo> {
   try {
-    const data = await apiFetch<{ hasRole: boolean }>("/api/listings/check-role");
-    return data.hasRole;
+    const data = await apiFetch<RoleInfo>("/api/listings/check-role");
+    return data;
   } catch {
-    return false;
+    return { hasRole: false, isAdmin: false, isWarehouseStaff: false };
   }
 }

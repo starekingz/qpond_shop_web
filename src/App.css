@@ -388,6 +388,7 @@ body {
 }
 
 .chest-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -467,6 +468,33 @@ body {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.chest-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 85, 85, 0.15);
+  color: #ff5555;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.chest-card:hover .chest-delete-btn {
+  opacity: 1;
+}
+
+.chest-delete-btn:hover {
+  background: rgba(255, 85, 85, 0.35);
 }
 
 .chest-time {

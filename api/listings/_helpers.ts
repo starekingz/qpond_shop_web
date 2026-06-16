@@ -54,10 +54,17 @@ export async function verifyJwt(req: VercelRequest): Promise<JwtPayload | null> 
 }
 
 export async function checkListingPermission(discordId: string): Promise<boolean> {
-  // Check if user is in the allowed user ID whitelist
-  const allowedIds = (process.env.ALLOWED_LISTING_USER_IDS || "")
-    .split(/[\s,]+/)
-    .filter(Boolean);
-  if (allowedIds.length === 0) return false;
-  return allowedIds.includes(discordId);
+  return (await checkSuperAdmin(discordId)) || (await checkWarehouseStaff(discordId));
+}
+
+export async function checkSuperAdmin(discordId: string): Promise<boolean> {
+  const ids = (process.env.SUPER_ADMIN_IDS || "").split(/[,\s]+/).filter(Boolean);
+  if (ids.length === 0) return false;
+  return ids.includes(discordId);
+}
+
+export async function checkWarehouseStaff(discordId: string): Promise<boolean> {
+  const ids = (process.env.WAREHOUSE_STAFF_IDS || "").split(/[,\s]+/).filter(Boolean);
+  if (ids.length === 0) return false;
+  return ids.includes(discordId);
 }
